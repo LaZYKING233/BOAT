@@ -50,6 +50,9 @@ Windows 下建议先 `cd tools/boatctl`，后面的命令可以简写成 `node b
 | `selftest [--open COMx] [--duration 15s] [--out r.json]` | **全自动自检** |
 | `record --out x.jsonl [--duration 60s]` | 录制遥测到 JSONL |
 | `analyze x.jsonl [--json]` | 离线分析录制文件 |
+| `goto <lat> <lon> [--arrive 2] [--hold 6]` | **纯导航到点**，不启动采样任务 |
+| `navrun --to lat,lon --gains ...` | **设定目标 → 实跑 → 落盘 → 出调参报告** |
+| `pidreport x.jsonl [--json]` | 复盘某次实跑，给出参数调整方向 |
 | `sim [--port 3311] [--loop-ms 1000] [--gps] [--no-temp] [--no-imu] [--no-ph]` | 模拟桥（无硬件自测） |
 
 全局：`--url http://127.0.0.1:3000`、`--json`。
@@ -91,6 +94,72 @@ GPS 被刻意降级为 warning —— 室内调试不该被它挡住。
 
 ---
 
+## PID 整定流程
+
+真实水面的干扰是风和流，PID 的任务就是让船头持续对准目标。所以整定不是
+"调到看起来顺"，而是**用实跑数据判断是哪一环在拖后腿**。
+
+标准循环：
+
+```
+改 Navigation_Init() 的参数  ->  编译烧录  ->  navrun 跑一段  ->  看报告  ->  再改
+```
+
+```bash
+node bin/boatctl.js navrun --open COM7 \
+  --to 34.50021,104.00024 \
+  --gains 2.0,0.35,0.25 \
+  --xgains 2.3,0.30,0.12 \
+  --label 实验1-kp2.0 \
+  --note "东北向 18m，微风"
+```
+
+每次运行落两个文件：
+
+```
+runs/实验1-kp2.0-<时间>.jsonl       逐帧遥测
+runs/实验1-kp2.0-<时间>.meta.json   增益、目标、停止原因、备注
+```
+
+**把 `--gains` 写进去是关键**：下次复盘时能确定"这份数据是哪组参数跑出来的"，
+不会出现参数和数据对不上、白跑一轮的情况。
+
+### 报告里的指标
+
+| 指标 | 含义 | 目标 |
+|---|---|---|
+| `±10° 内占比` | 航向误差维持在 ±10° 以内的时间比例 | ≥ 80% |
+| `平均 / P95 误差` | 航向跟踪的整体水平 | 平均 < 8°，P95 < 15° |
+| `零穿次数 / 周期` | 误差在正负之间来回切换的频率 | 越少越好，周期 > 10s |
+| `饱和占比` | `turn_output` 顶到限幅的时间比例 | < 10% |
+| `稳态有符号均值` | 末段误差的**方向**——持续同号说明有恒定外力 | < 8° |
+| `横向偏差 RMS` | 船偏离航线的程度 | < 3 m |
+| `收敛时刻` | 第几秒起误差稳定在 ±10° 内 5 秒 | 越早越好 |
+
+### 决策表
+
+| 现象 | 报告里的信号 | 改什么 |
+|---|---|---|
+| 船头左右反复摆 | 零穿多、周期 < 10s、摆幅 > 6° | 降 `heading kp`（×0.7） |
+| 大周期缓慢漂摆 | 零穿少但周期 > 10s | 升 `kd`（×1.5），仍漂再降 `ki` |
+| 一直偏向一侧 | 稳态有符号均值 > 8°，且未饱和 | 升 `ki`（×1.6）——这是风和流 |
+| 电机长期打满 | 饱和占比 > 30% | 降 `kp`，或查电机校准/桨效是否左右不对称 |
+| 航向跟住了但不贴航线 | 横向 RMS > 3m | 升 `crosstrack kp`（×1.4） |
+
+报告会按这个优先级给结论：**先振荡、再饱和、最后才谈跟踪精度**。
+振荡没解决之前调 `ki` 是没有意义的。
+
+### 离线复盘
+
+```bash
+node bin/boatctl.js pidreport runs/实验1-kp2.0-xxx.jsonl
+node bin/boatctl.js pidreport runs/实验1-kp2.0-xxx.jsonl --json > report.json
+```
+
+会自动读取同名 `.meta.json` 里的增益信息。加 `--no-plot` 可关掉 ASCII 曲线。
+
+---
+
 ## 库 API（写脚本时用这个）
 
 ```js
@@ -109,6 +178,7 @@ await c.cmd('stop');
 await c.motor(50, 50);
 await c.mcal(1.0, 0.85, 0, 10);
 await c.send({ t: 'target', lat: 345001000, lon: 1040001000, r: 5, ar: 1, rr: 8 });
+await c.goto(34.5002, 104.0002, { arrive: 2, hold: 6 }); // 纯导航，不启采样任务
 await c.targetZone('zone_A');
 await c.cancelTask();
 await c.close();
@@ -159,9 +229,11 @@ node bin/boatctl.js selftest --url http://127.0.0.1:3312 --open SIM
 
 ## 后续扩展点
 
-已预留、尚未实现：
+已实现：`goto` / `navrun` / `pidreport`（见上）。
 
+尚未实现：
+
+- `sweep`：自动遍历增益（kp 依次取 1.2/1.6/2.0…），每点跑一次 navrun 并汇总，
+  省去手动改编译烧录的循环。需要参数能在运行时下发才有意义（当前 PID 增益是编译期常量）。
 - `scenario`：把一串操作写成 JSON 脚本顺序执行（连通性 → 传感器 → 电机 → 导航）。
-- `sweep`：遍历参数（电机校准系数、PID 增益），每个点采一段并统计，用于自动整定。
-- `navtrack`：记录船位轨迹，评估航线贴合度、超调、收敛时间。
 - 直接串口模式（绕开 WebUI），用于 WebUI 不在场的极端情况。

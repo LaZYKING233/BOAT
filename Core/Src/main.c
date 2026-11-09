@@ -169,6 +169,7 @@ static void Telemetry_SendData(void)
               "\"iv\":%u,\"ir\":%ld,\"ip\":%ld,\"iy\":%ld,\"ib\":%lu,\"ia\":%lu,"
               "\"gb\":%lu,\"gl\":%lu,"
               "\"ns\":%u,\"nd\":%ld,\"nt\":%ld,\"bs\":%u,\"bd\":%ld,\"rs\":%u,\"rd\":%ld,\"xt\":%ld,\"ch\":%ld,"
+              "\"to\":%d,\"lw\":%d,\"rw\":%d,"
               "\"aiph\":%u,\"aiphn\":%u,\"ait\":%u,\"aitn\":%u,"
               "\"mls\":%ld,\"mrs\":%ld,\"mlo\":%ld,\"mro\":%ld}\r\n",
               (unsigned long)seq++,
@@ -199,6 +200,9 @@ static void Telemetry_SendData(void)
               (long)(nav.return_distance_m * 100.0f),
               (long)(nav.cross_track_error_m * 100.0f),
               (long)(nav.corrected_heading * 100.0f),
+              (int)nav.turn_output,
+              (int)Motor_GetLastPwm(MOTOR_SPEED_LEFT),
+              (int)Motor_GetLastPwm(MOTOR_SPEED_RIGHT),
               ai_status.ph_similarity,
               ai_status.ph_normal,
               ai_status.temperature_similarity,

@@ -45,6 +45,8 @@ function createSimulator(options = {}) {
     startUptimeMs: 5000,
     baseLat: 34.5001,
     baseLon: 104.0001,
+    kp: 1.5,          // 模拟的航向比例增益，调大即可复现振荡
+    driftMps: 0.35,   // 侧向水流/风造成的恒定漂移（m/s），PID 就是要对抗它
     ...options
   };
 
@@ -54,6 +56,7 @@ function createSimulator(options = {}) {
     connected: false,
     boat: { lat: opt.baseLat, lon: opt.baseLon },
     yaw: 0,
+    yawRate: 0,
     target: null,
     navState: 0,
     motor: { l: 0, r: 0 },
@@ -104,26 +107,43 @@ function createSimulator(options = {}) {
     state.uptimeMs += opt.loopMs;
     if (!opt.seqStuck) state.seq += 1;
 
-    // ---- 简单运动模型：有目标就朝目标走，走不到就保持 ----
+    // ---- 运动模型：一阶舵效 + 无阻尼，kp 调大时会自然振荡 ----
     let headingError = 0;
     let distance = 0;
+    let turn = 0;
+    let lw = 0;
+    let rw = 0;
+
     if (state.target) {
       distance = distanceTo(state.boat.lat, state.boat.lon, state.target.lat, state.target.lon);
       const bearing = bearingTo(state.boat.lat, state.boat.lon, state.target.lat, state.target.lon);
       headingError = norm180(bearing - state.yaw);
-      state.yaw = norm180(state.yaw + clamp(headingError, -30, 30) * 0.35);
 
       if (distance <= 1) {
         state.navState = 2;
+        state.yawRate = 0;
       } else {
         state.navState = 1;
+        turn = clamp(opt.kp * headingError, -80, 80);
+        const targetRate = turn * 0.35;
+        state.yawRate += (targetRate - state.yawRate) * 0.5;
+        state.yaw = norm180(state.yaw + state.yawRate * (dtMs / 1000));
+
+        lw = Math.round(clamp(60 + turn, -999, 999));
+        rw = Math.round(clamp(60 - turn, -999, 999));
+
         const speed = 0.6 * (dtMs / 1000);
         const rad = (bearing * Math.PI) / 180;
         state.boat.lat += (Math.cos(rad) * speed) / metersPerDegLat;
         state.boat.lon += (Math.sin(rad) * speed) / metersPerDegLon(state.boat.lat);
+
+        // 恒定向东的水流/风：船会被推离航线，PID 必须持续修正。
+        // 没有这一项，模拟出来的航向误差永远是 0，什么都测不出来。
+        state.boat.lon += (opt.driftMps * (dtMs / 1000)) / metersPerDegLon(state.boat.lat);
       }
     } else {
       state.navState = 0;
+      state.yawRate = 0;
     }
 
     const jitter = (n, amp) => Math.round(n + (Math.random() - 0.5) * 2 * amp);
@@ -163,6 +183,9 @@ function createSimulator(options = {}) {
       rd: 0,
       xt: state.target ? jitter(-20, 4) : 0,
       ch: Math.round(norm180(state.yaw + headingError) * 100),
+      to: Math.round(turn),
+      lw: Math.round(lw),
+      rw: Math.round(rw),
       aiph: opt.aiOk ? state.aiPhSimilarity : 0,
       aiphn: opt.aiOk ? 1 : 0,
       ait: opt.aiOk ? state.aiTempSimilarity : 0,

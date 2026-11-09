@@ -41,7 +41,9 @@ node_modules/
 *.fdb_latexmk
 
 # ---------- boatctl 录制与临时产物 ----------
+# runs/ 是每次实跑的数据归档，体积会持续增长，不入库
 tools/boatctl/tmp/
+tools/boatctl/runs/
 *.jsonl
 record-*.jsonl
 

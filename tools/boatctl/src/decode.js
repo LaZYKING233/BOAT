@@ -70,6 +70,11 @@ function decodeTelemetry(raw, rxAt) {
     crossTrackM: div(raw.xt, 100),
     correctedHeadingDeg: div(raw.ch, 100),
 
+    // ---- 控制输出（PID 整定必需：只看误差无法区分"增益过大"与"输出饱和"）----
+    turnOutput: num(raw.to),
+    leftPwm: num(raw.lw),
+    rightPwm: num(raw.rw),
+
     // ---- 边缘 AI ----
     aiPhSimilarity: num(raw.aiph),
     aiPhNormal: flag(raw.aiphn),

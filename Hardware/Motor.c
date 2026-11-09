@@ -6,6 +6,9 @@
 
 MotorCal_t motor_cal = { 1.0f, 1.0f, 0, 0 };
 
+/* 最近一次实际下发的 PWM（带符号），供遥测上报 */
+static int16_t motor_last_pwm[4] = { 0, 0, 0, 0 };
+
 void Motor_Init(void)
 {
 	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
@@ -102,6 +105,16 @@ void Motor_Go_PWM(MotorId motor, int16_t speed)
 
         __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, pwm_value);
     }
+
+    if ((unsigned)motor < 4U)
+    {
+        motor_last_pwm[motor] = (speed >= 0) ? (int16_t)pwm_value : (int16_t)(-pwm_value);
+    }
+}
+
+int16_t Motor_GetLastPwm(MotorId motor)
+{
+    return ((unsigned)motor < 4U) ? motor_last_pwm[motor] : 0;
 }
 
 // 停止所有电机
@@ -112,6 +125,10 @@ void Motor_Stop_All(void)
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, 0);
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, 0);
 
+    motor_last_pwm[0] = 0;
+    motor_last_pwm[1] = 0;
+    motor_last_pwm[2] = 0;
+    motor_last_pwm[3] = 0;
 }
 
 void Motor_SetCalibration(float left_scale, float right_scale, int16_t left_offset, int16_t right_offset)

@@ -48,6 +48,13 @@ extern MotorCal_t motor_cal;
 
 void Motor_Init(void);
 void Motor_Go_PWM(MotorId motor, int16_t pulse);
+
+/**
+ * @brief  取最近一次实际下发给电机的 PWM（带符号，-999~999）
+ * @note   用于遥测上报，PID 整定时需要看到"控制器输出了多少"，
+ *         否则无法区分"增益过大产生振荡"与"输出长期饱和、积分在发散"。
+ */
+int16_t Motor_GetLastPwm(MotorId motor);
 void Motor_Stop_All(void);
 void Motor_SetCalibration(float left_scale, float right_scale, int16_t left_offset, int16_t right_offset);
 

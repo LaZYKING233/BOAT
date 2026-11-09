@@ -129,6 +129,7 @@ node tools/boatctl/bin/boatctl.js selftest --open COM7 --out report.json
 | `bs` / `bd` | 边界状态 / 距边界距离（负数=越界） | - / m×100 |
 | `rs` / `rd` | 归位状态 / 距归位点距离 | - / m×100 |
 | `xt` / `ch` | 横向偏差 / 横向修正后目标航向 | m×100 / 度×100 |
+| `to` / `lw` / `rw` | 转向输出(PID) / 左右电机实际 PWM | -999~999 |
 | `aiph`/`aiphn`/`ait`/`aitn` | 边缘 AI：pH 相似度/是否正常、温度相似度/是否正常 | 0-100 / 0-1 |
 | `mls`/`mrs`/`mlo`/`mro` | 电机校准：左右缩放(×100)、左右偏移 | - |
 

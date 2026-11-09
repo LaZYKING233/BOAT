@@ -257,6 +257,21 @@ class BoatClient extends EventEmitter {
     return this.request('POST', '/api/targets/zone', { zoneId });
   }
 
+  /**
+   * 纯导航：直接下发一个 target，不启动 WebUI 的 8 点巡检任务。
+   * 整定 PID 时用这个——采样状态机会在附近做稳定/采样，干扰航向数据。
+   */
+  async goto(lat, lon, { arrive = 2, hold = 6, drift = 8 } = {}) {
+    return this.send({
+      t: 'target',
+      lat: Math.round(lat * 1e7),
+      lon: Math.round(lon * 1e7),
+      r: hold,
+      ar: arrive,
+      rr: drift
+    });
+  }
+
   async cancelTask() {
     return this.request('POST', '/api/sampling/cancel');
   }
