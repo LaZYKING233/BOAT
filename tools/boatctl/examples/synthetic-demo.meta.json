@@ -1,0 +1,22 @@
+{
+  "runId": "synthetic-demo",
+  "startedAt": "2026-11-09T10:14:49.703Z",
+  "endedAt": "2026-11-09T10:14:49.703Z",
+  "stopReason": "arrived",
+  "frames": 60,
+  "target": {
+    "lat": 34.5002144,
+    "lon": 104.0002387
+  },
+  "gains": {
+    "kp": 2,
+    "ki": 0.35,
+    "kd": 0.25
+  },
+  "xgains": {
+    "kp": 2.3,
+    "ki": 0.3,
+    "kd": 0.12
+  },
+  "note": "合成数据，仅用于演示报告格式，不是真实实跑"
+}

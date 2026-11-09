@@ -46,6 +46,8 @@ tools/boatctl/tmp/
 tools/boatctl/runs/
 *.jsonl
 record-*.jsonl
+# 示例数据仅作格式参考，保留入库
+!tools/boatctl/examples/*.jsonl
 
 # ---------- 归档与参考资料（不属于本项目代码）----------
 # 注意用 /archive/ 锚定根目录，否则会连 docs/archive/ 一起忽略

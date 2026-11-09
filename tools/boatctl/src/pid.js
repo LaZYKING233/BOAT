@@ -116,10 +116,38 @@ function analyzeRun(samples, options = {}) {
   }
   const oscillationAmplitude = lobes.length ? round(mean(lobes)) : null;
 
+  /* 区分"持续振荡"和"收敛中的过渡过程"：
+   * 后者是正常的超调衰减，不该报警——否则会让人去追一个不存在的问题。 */
+  const lobeHalf = Math.floor(lobes.length / 2);
+  const earlyAmplitude = lobeHalf > 0 ? round(mean(lobes.slice(0, lobeHalf))) : null;
+  const lateAmplitude = lobeHalf > 0 ? round(mean(lobes.slice(lobeHalf))) : null;
+
+  /* 用 lobe 幅值对序号的线性回归斜率判断衰减趋势。
+   * 之前用"后段均值 < 前段均值 × 0.55"，判据太脆——比值刚好卡在 0.55
+   * 附近时会在"持续振荡"和"正常收敛"之间反复横跳。
+   * 斜率法对整体趋势更敏感，且能给出可读的"每周期衰减百分比"。 */
+  let amplitudeSlope = null;
+  let decayPerCycle = null;
+  if (lobes.length >= 3) {
+    const xs = lobes.map((_, i) => i);
+    const mx = mean(xs);
+    const my = mean(lobes);
+    const num = xs.reduce((s, x, i) => s + (x - mx) * (lobes[i] - my), 0);
+    const den = xs.reduce((s, x) => s + (x - mx) ** 2, 0);
+    amplitudeSlope = den ? num / den : 0;
+    decayPerCycle = my > 0 ? round(amplitudeSlope / my, 3) : null;
+  }
+
+  const decaying = decayPerCycle !== null && decayPerCycle < -0.08;
+
   report.metrics.oscillation = {
     zeroCrossings: crossings.length,
     periodS,
     amplitudeDeg: oscillationAmplitude,
+    earlyAmplitudeDeg: earlyAmplitude,
+    lateAmplitudeDeg: lateAmplitude,
+    decayPerCycle,
+    decaying: Boolean(decaying),
     crossingsPerSec: navDurationS > 0 ? round(crossings.length / navDurationS, 3) : null
   };
 
@@ -204,9 +232,13 @@ function analyzeRun(samples, options = {}) {
   const isOscillating = o.zeroCrossings >= 6 && o.periodS !== null && o.periodS < 10 && (o.amplitudeDeg || 0) > 6;
   const isSlowSwing = o.zeroCrossings >= 4 && o.periodS !== null && o.periodS >= 10;
 
-  if (isOscillating) {
-    push('fail', '检测到高频振荡',
-      `零穿 ${o.zeroCrossings} 次，周期约 ${o.periodS}s，摆幅约 ${o.amplitudeDeg}°`,
+  if (isOscillating && o.decaying) {
+    push('ok', '振荡正在收敛',
+      `零穿 ${o.zeroCrossings} 次，摆幅从 ${o.earlyAmplitudeDeg}° 衰减到 ${o.lateAmplitudeDeg}°（每周期 ${(o.decayPerCycle * 100).toFixed(0)}%）`,
+      '这是起航超调后的正常过渡过程，不用改参数。');
+  } else if (isOscillating) {
+    push('fail', '检测到持续振荡',
+      `零穿 ${o.zeroCrossings} 次，周期约 ${o.periodS}s，摆幅约 ${o.amplitudeDeg}°（前后段无衰减趋势）`,
       `典型是比例增益过大。把 heading_pid.kp 从 ${g.kp ?? '当前值'} 降到 ${scale(g.kp, 0.7) ?? '×0.7'} 再来一次；若仍有小幅度抖动再降 kd。`);
   } else if (isSlowSwing) {
     push('warn', '检测到低频摆动',
@@ -335,7 +367,8 @@ function renderReport(report, { color = true, samples = null, plot = false } = {
     + '°  最大 ' + m.tracking.maxAbsErrDeg + '°'
     + '   |   ±10°内 ' + (m.tracking.pctWithin10 * 100).toFixed(0) + '%');
   out.push('  振荡         零穿 ' + m.oscillation.zeroCrossings + ' 次'
-    + (m.oscillation.periodS ? '  周期 ' + m.oscillation.periodS + 's  摆幅 ' + m.oscillation.amplitudeDeg + '°' : ''));
+    + (m.oscillation.periodS ? '  周期 ' + m.oscillation.periodS + 's  摆幅 ' + m.oscillation.amplitudeDeg + '°' : '')
+    + (m.oscillation.decaying ? '  (衰减中 ' + m.oscillation.earlyAmplitudeDeg + '°→' + m.oscillation.lateAmplitudeDeg + '°)' : ''));
   out.push('  控制输出     平均 ' + m.control.meanAbsTurn + '  饱和 ' + (m.control.satRatio * 100).toFixed(0) + '%'
     + '  最长饱和 ' + m.control.longestSaturationS + 's'
     + '   |   左/右 PWM 均值 ' + m.control.meanAbsLeftPwm + ' / ' + m.control.meanAbsRightPwm);
