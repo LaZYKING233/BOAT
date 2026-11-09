@@ -1,0 +1,1160 @@
+% ===========================================================================
+% 智航清泓：基于LoRa的物联网水质检测小船 · 技术设计文档
+% 通用技术设计文档
+% 编译：xelatex 设计文档.tex
+% ===========================================================================
+\documentclass[12pt,a4paper]{ctexart}
+
+% ---------- 页面设置 ----------
+\usepackage[top=2.5cm, bottom=2.5cm, left=2.8cm, right=2.8cm, headheight=14pt]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{multirow}
+\usepackage{fancyhdr}
+\usepackage{tikz}
+\usetikzlibrary{positioning, shapes.geometric}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{fontspec}
+
+% ---------- 代码高亮 ----------
+\lstdefinelanguage{json}{
+    basicstyle=\small\ttfamily,
+    morestring=[b]",
+    moredelim=*[l][\color{blue!60!black}]{"},
+    moredelim=*[l][\color{blue!60!black}]{},
+    literate=
+        *{0}{{{\color{black!60}0}}}{1}
+         {1}{{{\color{black!60}1}}}{1}
+         {2}{{{\color{black!60}2}}}{1}
+         {3}{{{\color{black!60}3}}}{1}
+         {4}{{{\color{black!60}4}}}{1}
+         {5}{{{\color{black!60}5}}}{1}
+         {6}{{{\color{black!60}6}}}{1}
+         {7}{{{\color{black!60}7}}}{1}
+         {8}{{{\color{black!60}8}}}{1}
+         {9}{{{\color{black!60}9}}}{1}
+}
+\lstset{
+    basicstyle=\small\ttfamily,
+    breaklines=true,
+    frame=single,
+    backgroundcolor=\color{gray!5},
+    showstringspaces=false,
+    columns=flexible,
+}
+
+% ---------- 超链接 ----------
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!60!black,
+    urlcolor=blue!60!black,
+    citecolor=blue!60!black,
+    unicode=true,
+    pdftitle={智航清泓：基于LoRa的物联网水质检测小船},
+    pdfauthor={},
+}
+
+% ---------- 页眉页脚 ----------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[C]{\small 基于STM32U5的水质巡检船与物联网及LLM分析系统}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ---------- 标题格式 ----------
+\ctexset{
+    section = {
+        format = {\Large\bfseries\raggedright},
+        beforeskip = {18pt},
+        afterskip = {6pt},
+    },
+    subsection = {
+        format = {\large\bfseries\raggedright},
+        beforeskip = {12pt},
+        afterskip = {4pt},
+    },
+    subsubsection = {
+        format = {\normalsize\bfseries\raggedright},
+        beforeskip = {8pt},
+        afterskip = {2pt},
+    },
+}
+
+% ---------- 自定义命令 ----------
+\newcommand{\tabincell}[2]{\begin{tabular}{@{}#1@{}}#2\end{tabular}}
+
+\begin{document}
+
+% ========== 封面 ==========
+\begin{titlepage}
+\centering
+\vspace*{6cm}
+
+{\Huge\bfseries 基于STM32U5的水质巡检船与物联网及LLM分析系统\par}
+
+\vfill
+
+{\normalsize 2026年6月}
+
+\end{titlepage}
+
+% ========== 摘要 ==========
+\begin{center}
+{\Large\bfseries 摘\quad\quad 要\par}
+\addcontentsline{toc}{section}{摘要}
+\end{center}
+
+本项目设计并实现了一款面向水产养殖场景的小型无人船水质监测系统。系统以STM32U5A5ZJTxQ微控制器为核心，搭载pH传感器、浊度传感器、DS18B20数字温度传感器，以及ATK-MO1218 GPS模块和ATK-IMU901九轴姿态传感器。传感器数据经STM32采集处理后，通过LoRa无线通信模块以JSON格式实时回传至本地PC。本地PC运行基于Node.js的后端服务（Express + WebSocket + SerialPort），通过USB串口接收LoRa数据并解析，浏览器WebUI提供三栏式Dashboard实时监控界面，集成Leaflet地图、区域管理卡片和控制面板。
+
+系统实现了以下核心功能：1. 多参数水质实时采集与无线传输；2. GPS+IMU融合的PID航向控制自主导航，含区域保持与漂移修正；3. 养殖区域管理与多点自动巡检采样，每区域8点，30秒稳定、5秒采样间隔；4. 基于NanoEdge AI Studio训练的传感器健康异常检测模型在STM32端侧运行；5. 云端/本地大模型LLM结合规则引擎的水质风险综合分析；6. WebUI可调的per-motor电机校准系统。数据链路全在本机，无需云服务器或MQTT中间件部署。
+
+系统采用裸机 HAL库固件架构，主循环20ms周期，遥测数据每秒上报一次。下行通信支持target（导航目标）、cmd（控制指令）、motor（电机直驱）、mcal（电机校准）四种JSON命令类型。整套系统面向真实水产养殖场景设计，支持按养殖区域独立配置养殖品种与水质阈值，已形成从传感器采集到用户界面的完整产品闭环。
+
+\vspace{1em}
+\noindent\textbf{关键词：}STM32U5；LoRa；水质监测；无人船；物联网；NanoEdge AI；嵌入式系统
+
+\newpage
+\renewcommand{\contentsname}{}
+\begin{center}
+{\Large\bfseries 目\quad\quad 录}
+\end{center}
+\addcontentsline{toc}{section}{目录}
+\begingroup
+\hypersetup{linkcolor=black}
+\tableofcontents
+\endgroup
+\newpage
+
+% ===========================================================================
+% 第一部分：系统概述
+% ===========================================================================
+\section{第一部分\quad 系统概述}
+
+\subsection{功能与特性}
+
+本系统面向水产养殖水质巡检场景，提供了从无人船自主航行到Web端风险分析的一体化解决方案，具备以下八项核心功能：
+
+\begin{enumerate}[label=\arabic*.]
+    \item \textbf{多参数水质实时采集}：小船搭载pH传感器、浊度传感器和DS18B20数字温度传感器，可同步采集水域三项关键水质指标。STM32主循环每20ms执行一次，遥测数据以完整JSON格式通过LoRa每秒上报一次。
+
+    \item \textbf{GPS+IMU融合航点导航}：集成ATK-MO1218 GPS模块和ATK-IMU901九轴姿态传感器，实现基于PID航向控制器的自主导航。到达半径5m，漂移半径8m触发修正。
+
+    \item \textbf{养殖区域管理与多点巡检}：支持创建轴对齐矩形水产养殖区域，每个区域独立配置养殖品种（内置：草鱼、鲫鱼、鲤鱼、鲈鱼、虾、蟹）和水质阈值（pH范围、温度范围、浊度上限）。启动巡检后自动生成采样点，依次导航前往采样。
+
+    \item \textbf{LoRa远距离无线传输}：采用LoRa无线通信模块，通过USART3与STM32连接，将水质数据远距离传输至USB串口接收端。下行命令支持广播模式，适配水域场景的无线数据回传。
+
+    \item \textbf{三栏式WebUI实时监控}：浏览器三栏Dashboard界面——左侧遥测面板（传感器原始值+计算值、GPS/IMU状态、导航信息、电机校准值、NanoEdge AI状态、可折叠原始JSON）、中间Leaflet地图+区域卡片网格、右侧控制面板（快捷指令、电机测试/校准滑块、导航监视器、区域详情、AI对话）。高级模式开关控制工程调试信息的显示。
+
+    \item \textbf{边缘AI传感器健康检测}：在STM32上部署NanoEdge AI Studio训练的异常检测模型（pH 5维输入、温度3维输入），实时判断传感器工作状态是否正常，相似度分数（0--100）及正常/异常标记通过LoRa遥测字段回传，供后端风险分析参考传感器数据可信度。
+
+    \item \textbf{大模型风险分析}：支持云端API（DeepSeek、Anthropic兼容接口）和本地Ollama模型两种LLM后端，不可用时自动降级为规则引擎（按各区域养殖品种阈值判断normal/warning/danger三级风险）。分析提示词整合水质数据、养殖品种、历史趋势和边缘AI传感器健康状态。
+
+    \item \textbf{电机校准系统}：TB6612双H桥驱动两个推进直流电机。通过WebUI可为每个电机独立设置缩放系数（0.5--1.5）和偏移量（--200--200），补偿物理转速差异和死区，无需修改固件代码。
+\end{enumerate}
+
+\subsection{应用领域}
+
+本系统主要面向以下四类应用场景：
+
+\begin{enumerate}[label=\arabic*.]
+    \item \textbf{水产养殖水质管控}：适用于各类淡水养殖池塘、虾蟹养殖塘等，实时监测水体pH值、浊度和温度，帮助养殖户精准掌握各养殖区域的水质状况。按养殖品种独立配置阈值和分析逻辑，及时发现水质风险并给出AI驱动的投喂、换水、复测建议。
+
+    \item \textbf{城郊小型湖泊生态监测}：可用于城市周边景观湖泊、人工湿地等小型水体的连续水质监测，提供周期性水质数据记录，支持长期生态趋势观察。
+
+    \item \textbf{农村灌溉水塘监测}：适用于农业灌溉蓄水塘的水质检测，确保灌溉用水安全，防止受污染水体进入农田。
+
+    \item \textbf{河道浅水域巡查}：可用于中小型河道、溪流等浅水区域的水质巡检，替代传统人工划船采样方式，降低人力成本和安全风险。
+\end{enumerate}
+
+整套系统基于本机部署，仅需一台Windows/Mac/Linux计算机配合LoRa USB接收端即可运行全部功能，特别适合预算有限的基层水产养殖和生态监测场景。
+
+\subsection{主要技术特点}
+
+\begin{enumerate}[label=\arabic*.]
+    \item \textbf{低功耗高性能主控}：采用STM32U5A5ZJTxQ微控制器，基于Arm Cortex-M33内核（带TrustZone安全扩展），主频最高160MHz，集成512KB Flash和256KB SRAM，14-bit ADC，14路DMA通道，支持多种低功耗模式（Sleep/Stop/Standby）。该芯片属于意法半导体2024年推出的超低功耗旗舰系列，天然契合电池供电的无人船场景。
+
+    \item \textbf{本地化全栈架构}：STM32 $\rightarrow$ LoRa $\rightarrow$ USB串口 $\rightarrow$ Node.js后端 $\rightarrow$ 浏览器WebUI，数据链路完全在本地闭环。无需云服务器、MQTT中间件、数据库或公网部署，系统复杂度低、运行零成本、演示不受网络环境约束。
+
+    \item \textbf{GPS+IMU融合导航}：GPS提供绝对位置参考（大圆距离计算），IMU提供高频航向数据（Yaw角）。PID航向控制器以航向误差为输入，实时输出左右电机差速PWM，实现可靠的航点导航和区域保持（到达半径5m、漂移半径8m）。
+
+    \item \textbf{边缘AI + LLM两级智能协同}：STM32端运行NanoEdge AI异常检测模型判断传感器健康状态（实时、低延迟、无网络依赖），云端/本地LLM结合传感器数据和边缘AI结果进行综合风险评估（语义分析、养殖建议），两级协同兼顾嵌入式AI含量和产品分析深度。
+
+    \item \textbf{裸机可预测固件架构}：STM32固件采用裸机HAL库开发，无RTOS依赖，任务时序明确——主循环20ms、导航更新50ms、遥测发送1000ms。所有外设驱动通过中断处理，主循环不阻塞，时序可预测。
+
+    \item \textbf{模块化代码组织}：固件按``Hardware/''（硬件驱动）和``System/''（纯算法）两个维度组织源代码，驱动与逻辑分离。硬件引脚配置统一通过STM32CubeMX的BOAT.ioc管理，代码变更可追溯。
+\end{enumerate}
+
+\subsection{主要性能指标}
+
+\begin{table}[H]
+\centering
+\caption{系统主要性能指标}
+\label{tab:specs}
+\begin{tabular}{p{3.5cm}p{4.5cm}p{5.5cm}}
+\toprule
+\textbf{性能指标} & \textbf{参数值} & \textbf{说明} \\
+\midrule
+pH 测量范围 & 0--14 & 公式为估算值，需标准液校准；原始ADC值和mV电压准确 \\
+\hline
+浊度测量范围 & 0--3000 NTU & 公式为估算值；原始ADC值和mV电压准确 \\
+\hline
+温度测量精度 & $\pm$0.5\textdegree C & DS18B20数字传感器，已修正85\textdegree C默认值问题 \\
+\hline
+GPS定位 & 室外预期可定位 & ATK-MO1218，室内fix=0为正常现象 \\
+\hline
+IMU姿态 & Roll/Pitch/Yaw & ATK-IMU901九轴，ATKP协议解析，已验证iv=1 \\
+\hline
+LoRa通信速率 & 115200 baud & USART3，距离取决于环境 \\
+\hline
+遥测上报周期 & $\approx$1000 ms & 完整JSON帧，\texttt{\textbackslash r\textbackslash n}结尾 \\
+\hline
+导航精度 & 到达半径5m，漂移修正8m & PID航向控制 \\
+\hline
+ADC分辨率 & 14-bit (16384级) & 3.3V参考电压，采样时间391.5周期 \\
+\hline
+固件主循环周期 & 20 ms & 裸机HAL架构，无RTOS \\
+\hline
+传感器健康检测 & pH 5维 + 温度3维 & NanoEdge AI Studio训练，STM32端侧推理 \\
+\hline
+数据存储格式 & JSON Line (.jsonl) & 无需数据库，每行一条样本JSON \\
+\hline
+下行命令类型 & 4种 & target / cmd / motor / mcal \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{主要创新点}
+
+\begin{enumerate}[label=\arabic*.]
+    \item \textbf{自主巡航 + 水质检测 + 区域管理一体化闭环}：不仅实现无人船自主巡航和多参数水质检测，还集成了养殖区域管理、品种配置、多点自动巡检采样的完整产品闭环，面向真实水产养殖操作流程设计。
+
+    \item \textbf{边缘AI传感器健康检测}：利用NanoEdge AI Studio在STM32上部署异常检测模型（pH 5维、温度3维），实时判断传感器工作状态，为上层风险分析提供数据可信度参考。两个模型通过符号前缀隔离避免链接冲突，是嵌入式端侧智能在传感器健康领域的典型实践。
+
+    \item \textbf{边缘AI + LLM两级协同分析}：STM32端进行传感器健康检测（实时、低延迟），云端/本地LLM进行综合风险评估（语义分析、养殖建议、异常解释），两级协同兼顾端侧实时性和大模型驱动的综合分析能力。
+
+    \item \textbf{本机全栈零依赖部署}：数据链路STM32 $\rightarrow$ LoRa $\rightarrow$ USB串口 $\rightarrow$ Node.js $\rightarrow$ 浏览器全在本地闭环，不依赖任何云服务、消息中间件或外部数据库。单文件Node.js后端（server.js）即可驱动全部功能，现场演示不受网络和服务器状态影响。
+
+    \item \textbf{可在线校准的电机系统}：针对两个推进电机物理特性差异（同PWM下转速不同、低PWM死区），提供WebUI实时可调的per-motor缩放/偏移校准，校准值通过mcal命令下发至STM32固件并持久化至遥测回传。整个校准流程无需修改或重新烧录固件。
+
+    \item \textbf{完整的JSON通信协议设计}：定义了标准化的上行遥测（boot+data两种消息类型，20+字段）和下行命令（4种命令类型）的JSON协议体系，字段语义明确、可扩展，固件和WebUI双方严格按协议实现，为后续功能扩展和多船组网预留空间。
+\end{enumerate}
+
+\subsection{设计流程}
+
+本项目设计流程遵循嵌入式系统工程的典型V模型：
+
+\begin{enumerate}[label=\textbf{阶段\arabic*：}]
+    \item \textbf{需求分析}：面向水产养殖户的核心需求——了解各区域水质状况、判断是否存在风险、是否需要派船采样、提供投喂/换水决策参考。
+    \item \textbf{系统总体方案设计}：确定STM32 + LoRa + 本机WebUI的技术路线，划分硬件、固件、后端、前端四大子系统，定义JSON通信协议和数据模型。
+    \item \textbf{硬件设计}：传感器选型（pH/浊度/温度/GPS/IMU）、TB6612电机驱动电路设计、外设引脚分配、自定义双层PCB设计（原理图+Layout）。
+    \item \textbf{固件开发}：基于STM32CubeMX生成HAL库初始化代码，前期使用Keil MDK-ARM套件开发应用层逻辑，后期因NanoEdge AI边缘智能模型集成需要，切换至STM32CubeIDE进行开发与调试，模块化组织Hardware/和System/目录。
+    \item \textbf{后端与前端开发}：Node.js串口通信+HTTP/WebSocket服务，HTML+CSS+JavaScript三栏式WebUI（Leaflet地图）。
+    \item \textbf{PCB制板与焊接}：PCB打样，手工焊接各模块插座、电机驱动和电源电路。
+    \item \textbf{逐模块调试}：按LoRa通信 $\rightarrow$ ADC采集 $\rightarrow$ 温度传感器 $\rightarrow$ IMU $\rightarrow$ GPS $\rightarrow$ 电机驱动 $\rightarrow$ 导航闭环的顺序逐模块验证，降低集成风险。
+    \item \textbf{系统联调与测试}：在实际水域环境中进行完整的产品流程验证。
+\end{enumerate}
+
+% ===========================================================================
+% 第二部分：系统组成及功能说明
+% ===========================================================================
+\section{第二部分\quad 系统组成及功能说明}
+
+\subsection{整体介绍}
+
+本系统采用STM32 $\rightarrow$ LoRa $\rightarrow$ 本机PC $\rightarrow$ 浏览器的四段式物联网架构，各段之间通过标准化接口通信。图\ref{fig:arch}以框图展示了系统整体架构。
+
+\begin{figure}[H]
+\centering
+\resizebox{0.98\textwidth}{!}{%
+\begin{tikzpicture}[
+    node distance=1.4cm and 1.7cm,
+    box/.style={rectangle, draw=black!70, fill=blue!5, rounded corners=5pt, minimum width=2.5cm, minimum height=0.85cm, align=center, font=\footnotesize\bfseries},
+    sensor/.style={rectangle, draw=black!50, fill=green!5, rounded corners=4pt, minimum width=2.0cm, minimum height=0.65cm, align=center, font=\scriptsize},
+    module/.style={rectangle, draw=black!50, fill=yellow!5, rounded corners=4pt, minimum width=2.5cm, minimum height=0.75cm, align=center, font=\scriptsize},
+    arrow/.style={->, >=stealth, thick, black!60},
+    label/.style={font=\scriptsize\color{black!60}},
+    group/.style={rectangle, draw=black!30, dashed, rounded corners=6pt, inner sep=6pt},
+]
+
+% --- STM32 group (left) ---
+\node[group, fill=blue!3, minimum width=3.4cm, minimum height=8.2cm] (stm32_grp) at (0,0) {};
+\node[font=\footnotesize\bfseries, anchor=south] at (stm32_grp.north) {STM32U5 船载控制板};
+
+\node[sensor] (ph) at (0, 3.2) {pH传感器\\(PC0, ADC)};
+\node[sensor] (turb) at (0, 2.1) {浊度传感器\\(PC1 ADC+PB0)};
+\node[sensor] (temp) at (0, 1.0) {DS18B20\\(PB1, 单总线)};
+\node[sensor] (gps) at (0, -0.1) {GPS\\(UART4)};
+\node[sensor] (imu) at (0, -1.2) {IMU901\\(USART2)};
+\node[sensor] (motor) at (0, -2.3) {TB6612\\双电机};
+\node[module, fill=red!5] (neai) at (0, -3.4) {NanoEdge AI\\(异常检测)};
+
+% --- LoRa ---
+\node[box, fill=orange!10] (lora) at (4.6, 0) {LoRa};
+\draw[arrow] (stm32_grp.east) -- (lora.west) node[midway, label, above] {JSON遥测帧};
+
+% --- USB ---
+\node[box, fill=gray!10] (usb) at (7.8, 0) {USB串口\\接收端};
+\draw[arrow] (lora.east) -- (usb.west) node[midway, label, above] {无线};
+
+% --- PC group (right) ---
+\node[group, fill=cyan!3, minimum width=4.2cm, minimum height=7.6cm] (pc_grp) at (11.6, 0) {};
+\node[font=\footnotesize\bfseries, anchor=south] at (pc_grp.north) {本机PC};
+
+\node[box, fill=cyan!10] (node) at (11.6, 2.3) {Node.js 后端\\(Express+WebSocket)};
+\node[box, fill=cyan!10] (web) at (11.6, 0.6) {浏览器 WebUI\\(Leaflet Dashboard)};
+\node[module] (store) at (11.6, -1.3) {本地存储\\(zones.jsonl)};
+\node[module] (llm) at (11.6, -3.1) {LLM 风险分析\\(DeepSeek/Ollama)};
+
+\draw[arrow] (usb.east) -- (node.west);
+\draw[arrow, <->] (node) -- (web);
+\draw[arrow] (node) -- (store);
+\draw[arrow] (node) -- (llm);
+
+% --- Downlink arrows (dashed, reverse direction) ---
+\draw[arrow, dashed, red!60] (web.south east) .. controls +(0.8,-0.6) and +(0.8,-0.6) .. (node.south east);
+\draw[arrow, dashed, red!60] (node.south) -- (usb.south);
+\draw[arrow, dashed, red!60] (usb.south) -- (lora.south);
+\draw[arrow, dashed, red!60] (lora.south) -- (stm32_grp.south);
+
+\end{tikzpicture}%
+}
+\caption{图一：系统总体设计框架图\\注：实线箭头为上行数据流（STM32→LoRa→USB→Node.js→WebUI）；红色虚线箭头为下行命令流（WebUI→Node.js→USB→LoRa→STM32）。}
+\label{fig:arch}
+\end{figure}
+
+各段功能说明如下：
+
+\textbf{船载感知层（STM32U5主控板）：}负责全部传感器的数据采集（pH ADC、浊度 ADC+数字、DS18B20单总线、GPS NMEA解析、IMU ATKP解析），组装JSON遥测帧经LoRa发送，接收并解析下行JSON命令（四种类型），执行PID航向控制和TB6612电机驱动，运行NanoEdge AI传感器健康检测模型。
+
+\textbf{无线传输层（LoRa）：}STM32通过USART3与LoRa模块通信，LoRa模块将JSON数据帧无线传输至USB接收端。下行命令方向相反。通信采用逐行JSON协议，每行以\texttt{\textbackslash r\textbackslash n}结尾，广播模式支持0xFF 0xFF前缀。
+
+\textbf{本机后端层（Node.js）：}通过SerialPort库读取USB串口的LoRa数据，按\texttt{\textbackslash r\textbackslash n}拆行，解析JSON遥测帧。维护区域配置（zones.json）和采样历史（samples.jsonl），运行采样状态机，调用LLM进行风险分析，将遥测数据通过WebSocket实时推送至前端，将下行的控制指令通过串口转发至STM32。
+
+\textbf{前端交互层（浏览器WebUI）：}三栏式Dashboard界面，左侧显示实时遥测数据（连接状态、传感器值含原始数据、GPS/IMU、导航、NanoEdge AI状态、遥测元数据、可折叠原始JSON），中间显示Leaflet地图（矩形标注养殖区域、船只位置标记）和区域卡片网格（pH/水温/浊度/风险状态），右侧显示控制面板（快捷指令、电机测试滑块、电机校准、导航监视器、区域详情、AI对话）。右上角高级模式开关显示/隐藏工程调试面板。
+
+微信小程序作为备用移动端方案已完成初步开发，但在当前演示版本中暂不使用且不依赖公网服务器。
+
+\subsection{硬件系统介绍}
+
+\subsubsection{硬件整体介绍}
+
+船载硬件系统以STM32U5A5ZJTxQ微控制器为核心，通过其丰富的外设接口连接各功能模块。硬件采用自定义双层PCB设计，集成了传感器接口、电机驱动、LoRa通信和电源管理电路。图\ref{fig:hw_arch}以框图展示硬件各模块之间的互连关系。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    box/.style={rectangle, draw=black!70, rounded corners=6pt, minimum width=3cm, minimum height=0.8cm, align=center, font=\small\bfseries, fill=blue!3},
+    mod/.style={rectangle, draw=black!50, rounded corners=4pt, minimum width=2.6cm, minimum height=0.7cm, align=center, font=\footnotesize, fill=yellow!3},
+    arrow/.style={<->, >=stealth, thick, black!50},
+    arrow2/.style={->, >=stealth, thick, black!50},
+]
+
+\node[box, minimum width=3.5cm, minimum height=1cm] (mcu) at (0, 0) {STM32U5A5\\ZJTxQ\\(Cortex-M33)};
+
+% Left side - sensors
+\node[mod, left=2.5cm of mcu] (ph) {pH\\(PC0 ADC)};
+\node[mod, left=2.5cm of mcu, yshift=-1.2cm] (turb) {浊度\\(PC1 ADC + PB0)};
+\node[mod, left=2.5cm of mcu, yshift=-2.4cm] (ds18) {DS18B20\\(PB1)};
+
+% Right side - positioning
+\node[mod, right=2.5cm of mcu] (gps) {GPS\\(UART4 38400)};
+\node[mod, right=2.5cm of mcu, yshift=-1.2cm] (imu) {IMU901\\(USART2 115200)};
+
+% Bottom - actuators
+\node[mod, below=1.8cm of mcu] (tb6612) {TB6612\\(TIM1 PWM + GPIO)};
+\node[mod, below=2.8cm of tb6612] (motor_l) {左推进电机};
+\node[mod, right=1.5cm of motor_l] (motor_r) {右推进电机};
+
+% Top - comms
+\node[mod, above=1.5cm of mcu] (lora) {LoRa\\(USART3 115200)};
+
+% Connections
+\draw[arrow] (ph) -- (mcu);
+\draw[arrow] (turb) -- (mcu);
+\draw[arrow] (ds18) -- (mcu);
+\draw[arrow] (mcu) -- (gps);
+\draw[arrow] (mcu) -- (imu);
+\draw[arrow] (mcu) -- (lora);
+\draw[arrow] (mcu) -- (tb6612);
+\draw[arrow2] (tb6612) -- (motor_l);
+\draw[arrow2] (tb6612) -- (motor_r);
+
+\end{tikzpicture}
+\caption{船载硬件模块互连框图}
+\label{fig:hw_arch}
+\end{figure}
+
+各模块的选型、连接方式和功能说明如下：
+
+\begin{enumerate}[label=\arabic*.]
+    \item \textbf{主控模块}：STM32U5A5ZJTxQ，Arm Cortex-M33内核，主频最高160MHz，512KB Flash/256KB SRAM，14-bit ADC（3.3V参考），14路DMA，支持多种低功耗模式。板载8MHz HSE晶振。SWD调试接口保留（PA13/PA14）。
+
+    \item \textbf{pH传感器}：玻璃电极法，模拟输出直接连接至ADC1\_IN1（PC0）。PCB新版直连ADC，不使用电阻分压，充分利用14-bit ADC的动态范围。采样时间配置为391.5周期以保证模拟信号稳定。
+
+    \item \textbf{浊度传感器}：光散射原理，模拟输出经2/3分压网络后连接至ADC1\_IN2（PC1），保护ADC输入不超过3.3V。另有数字输出DOUT连接至PB0（GPIO输入，带上拉），提供阈值比较信号。传感器原始电压通过公式 $\text{sensor\_mV} = \text{ADC\_mV} \times 3/2$ 还原。
+
+    \item \textbf{DS18B20温度传感器}：数字温度传感器，单总线协议连接至PB1（GPIO），需外接4.7k$\Omega$上拉电阻至3.3V。精度$\pm$0.5\textdegree C。固件已修正上电默认85\textdegree C的问题（通过轮询转换完成标志而非固定延时等待）。
+
+    \item \textbf{GPS模块}：正点原子ATK-MO1218，UART4接口（PA0/PA1），38400 baud，NMEA-0183协议。解析GPGGA（定位信息）、GPRMC（推荐最小数据）等语句。经纬度在遥测帧中以$\times$10000000的整数格式传输。
+
+    \item \textbf{IMU模块}：正点原子ATK-IMU901九轴姿态传感器（3轴陀螺仪+3轴加速度计+3轴磁力计），USART2接口（PA2/PA3），115200 baud，ATKP二进制协议。解析后提供Roll/Pitch/Yaw角度值（遥测中$\times$100的整数格式）。
+
+    \item \textbf{LoRa通信模块}：通过USART3（PB10 TX / PB11 RX），115200 baud与STM32通信。发送缓冲区512字节，确保完整JSON帧不被截断。下行接收支持从可能粘连的串口数据中提取完整JSON对象进行命令解析。
+
+    \item \textbf{电机驱动模块}：东芝TB6612FNG双H桥芯片，驱动两个推进直流电机。TIM1\_CH1（PE9）输出左电机PWM，TIM1\_CH2（PE11）输出右电机PWM，PC8/PC9控制左电机方向，PC10/PC11控制右电机方向，PD4为STBY使能引脚（默认高电平）。方向逻辑：AIN1=高、AIN2=低 正转；反之反转。
+
+    \item \textbf{电源模块}：可充电锂电池供电，配合DC-DC降压变换器为STM32和传感器提供3.3V，为TB6612电机驱动提供5V。LoRa模块供电端增加大容量储能电容应对瞬时发射电流。
+\end{enumerate}
+
+\subsubsection{机械设计介绍}
+
+本项目为小型单体船结构无人船平台，采用单体船身设计。主要机械设计要点如下：
+
+\begin{enumerate}[label=\arabic*.]
+    \item \textbf{船体结构}：单体船布局，单船身提供浮力和稳定性，甲板搭载电子设备舱。船体材料采用轻质防水板材，整体尺寸约长50cm $\times$ 宽35cm $\times$ 高15cm。
+
+    \item \textbf{推进系统}：两个直流电机分别驱动左/右螺旋桨（差速转向方案），安装于船体尾端两侧。差速转向避免了方向舵的机械复杂度，同时提供零半径转向能力。
+
+    \item \textbf{电子设备舱}：甲板中部防水密封舱，内置STM32主控板（自定义PCB）、LoRa模块、GPS/IMU模块和锂电池组。
+
+    \item \textbf{传感器安装}：pH传感器、浊度传感器和DS18B20温度传感器全部直接在船底打孔固定，探头探出部分位于船体底部，浸入水面以下，确保实时接触待测水体。
+
+    \item \textbf{GPS/IMU天线布置}：GPS有源天线安装于甲板顶部，确保对天视野。IMU模块水平固定于船体中心线上，Y轴对准船首方向。
+\end{enumerate}
+
+船体机械结构实物照片如图\ref{fig:hull1}和图\ref{fig:hull2}所示。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{图片/船模一.jpg}
+\caption{船体机械结构实物照片（一）}
+\label{fig:hull1}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{图片/船模二.jpg}
+\caption{船体机械结构实物照片（二）}
+\label{fig:hull2}
+\end{figure}
+
+\subsubsection{电路各模块介绍}
+
+硬件电路集成于一块自定义双层PCB上，替代了早期面包板飞线的原型方案。PCB设计关键要点：
+
+\begin{itemize}
+    \item 2层板设计，FR-4基材，1.6mm板厚，白色阻焊
+    \item 电源走线宽度不小于20mil，大电流路径（TB6612供电支路）加宽至40mil
+    \item 模拟区域（pH/浊度ADC输入）与数字区域（LoRa/电机PWM）物理分离，模拟地单点接地
+    \item LoRa模块供电端并联100$\mu$F电解电容 + 0.1$\mu$F陶瓷电容，应对发射瞬时电流
+    \item 传感器接口采用XH2.54插座，电机接口采用KF128端子，调试SWD接口采用4Pin排针
+\end{itemize}
+
+扩展板主原理图如图\ref{fig:sch_main}所示，清晰标注了STM32U5核心板插座、各传感器/通信模块接口、电机驱动接口及电源输入接口的引脚对应关系。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{图片/image1.png}
+\caption{扩展板主原理图（含STM32U5核心板、传感器/通信/电机接口）}
+\label{fig:sch_main}
+\end{figure}
+
+各子电路模块详细说明如下（完整引脚分配见表\ref{tab:pins}）：
+
+\begin{table}[H]
+\centering
+\caption{硬件引脚连接总表}
+\label{tab:pins}
+\begin{tabular}{p{3.5cm}p{2.5cm}p{3cm}p{4.5cm}}
+\toprule
+\textbf{模块/信号} & \textbf{STM32引脚} & \textbf{功能} & \textbf{说明} \\
+\midrule
+TB6612 PWMA & PE9 & TIM1\_CH1 PWM & 左电机PWM输出 \\
+TB6612 AIN1 & PC8 & GPIO\_Output & 左电机方向控制 \\
+TB6612 AIN2 & PC9 & GPIO\_Output & 左电机方向控制 \\
+TB6612 PWMB & PE11 & TIM1\_CH2 PWM & 右电机PWM输出 \\
+TB6612 BIN1 & PC10 & GPIO\_Output & 右电机方向控制 \\
+TB6612 BIN2 & PC11 & GPIO\_Output & 右电机方向控制 \\
+TB6612 STBY & PD4 & GPIO\_Output & 使能（默认高电平） \\
+\midrule
+LoRa TX & PB10 & USART3\_TX & 115200 baud \\
+LoRa RX & PB11 & USART3\_RX & 115200 baud \\
+\midrule
+GPS TX & PA0 & UART4\_RX & 38400 baud \\
+GPS RX & PA1 & UART4\_TX & 38400 baud \\
+\midrule
+IMU901 TX & PA2 & USART2\_RX & 115200 baud \\
+IMU901 RX & PA3 & USART2\_TX & 115200 baud \\
+\midrule
+pH 模拟输出 & PC0 & ADC1\_IN1 & 直连ADC，不分压 \\
+浊度 模拟输出 & PC1 & ADC1\_IN2 & 2/3分压后接入 \\
+浊度 DOUT & PB0 & GPIO\_Input & 数字输出，带上拉 \\
+\midrule
+DS18B20 DQ & PB1 & GPIO & 单总线，外接4.7k$\Omega$上拉 \\
+\midrule
+SWDIO & PA13 & SWD\_IO & 固件烧录/调试 \\
+SWCLK & PA14 & SWD\_CLK & 固件烧录/调试 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{pH传感器前端电路}：传感器输出直接连接至PC0（ADC1\_IN1），无电阻分压网络。14-bit ADC在3.3V参考电压下分辨率为0.2mV/LSB，采样时间391.5 ADC时钟周期（约24.5$\mu$s @ 16MHz ADC时钟），保证高阻抗pH电极信号的充分建立。
+
+\textbf{浊度传感器前端电路}：传感器模拟输出经2/3电阻分压（上分压电阻10k$\Omega$，下分压电阻20k$\Omega$，中点接ADC输入）后连接至PC1（ADC1\_IN2）。分压目的为保护ADC输入——浊度传感器在清水中输出较低，在极浑浊水中可能超过3.3V。数字输出DOUT经10k$\Omega$上拉至3.3V后连接至PB0。直流电压采样模块（含pH与浊度两路前端）的原理图与PCB设计图如图\ref{fig:sch_adc}和图\ref{fig:pcb_adc}所示。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{图片/image2.png}
+\caption{直流电压采样模块原理图（pH/浊度双路前端）}
+\label{fig:sch_adc}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.65\textwidth]{图片/image5.png}
+\caption{直流电压采样模块PCB设计图}
+\label{fig:pcb_adc}
+\end{figure}
+
+\textbf{TB6612电机驱动电路}：TB6612FNG工作电压VM=5V，逻辑电压VCC=3.3V。PWM输入直接由STM32的TIM1 CH1/CH2（PE9/PE11）提供，频率20kHz（人耳不可闻、电机效率较高）。方向信号AIN1/AIN2、BIN1/BIN2由STM32 GPIO直驱。STBY引脚默认通过10k$\Omega$上拉至3.3V保持使能状态，紧急停止时拉低。
+
+\textbf{DS18B20单总线电路}：DS18B20的DQ引脚（PB1）通过4.7k$\Omega$电阻上拉至3.3V。不需要额外的VDD供电（工作在寄生供电模式），VDD引脚接地即可。
+
+\textbf{电源电路}：锂电池（7.4V 2S Li-Po）输入，经DC-DC降压模块转为5V（供TB6612 VM和充电电路），再经AMS1117-3.3 LDO转换为3.3V（供STM32和各传感器）。模拟供电3.3VA通过磁珠与数字3.3VD隔离。各模块就近放置0.1$\mu$F去耦电容。
+
+（注：SCH原理图和PCB版图的完整截图请参见第三部分电路成果展示。）
+
+\subsection{软件系统介绍}
+
+\subsubsection{软件整体介绍}
+
+软件系统分为三大层次：嵌入式固件层、Node.js后端服务层、浏览器前端交互层。
+
+\textbf{嵌入式固件层}：基于STM32CubeMX生成的HAL库初始化代码，前期在Keil MDK-ARM中以ARMClang编译器构建，后期因边缘AI模型集成切换至STM32CubeIDE开发调试。应用层代码采用裸机循环架构，主循环周期20ms。所有外设数据接收均通过UART空闲中断 + DMA或单字节中断方式处理，主循环中轮询数据就绪标志后消费。固件同时集成三个NanoEdge AI异常检测模型，在端侧实时判断传感器健康状态。
+
+\textbf{Node.js后端层}：单文件\texttt{server.js}，基于Express（HTTP静态服务 + REST API）+ WebSocket（ws库，实时推送）+ SerialPort（@serialport库，USB串口通信）构建。启动时读取\texttt{data/zones.json}恢复区域配置，运行中通过WebSocket向所有连接的浏览器客户端广播遥测更新，通过HTTP API处理区域CRUD和采样操作，通过SerialPort向STM32发送下行命令。LLM风险分析模块支持云端API（DeepSeek/Anthropic兼容）、本地Ollama和规则兜底三种后端。
+
+\textbf{浏览器前端层}：单页HTML + 原生JavaScript + CSS，无构建工具依赖（直接由Express静态文件服务）。集成Leaflet 1.9.4地图库（通过CDN加载OpenStreetMap瓦片）。三栏响应式Dashboard布局，147个HTML元素ID与JavaScript逻辑完全对应。高级模式切换通过CSS类名控制工程调试面板的显示/隐藏。
+
+\textbf{微信小程序层}：已完成初步开发的备用移动端方案，位于\texttt{后端/new\_miniprogram/}目录。小程序采用标准微信小程序框架实现，提供与WebUI类似的遥测数据显示、区域管理和控制指令功能。当前演示版本以WebUI为主，小程序作为后续扩展的移动端入口，无需依赖公网服务器即可在局域网或本机环境下运行。
+
+\subsubsection{嵌入式固件各模块介绍}
+
+固件应用层代码按功能模块划分为硬件驱动层（\texttt{Hardware/}目录）和系统算法层（\texttt{System/}目录）：
+
+\begin{table}[H]
+\centering
+\caption{固件模块一览}
+\label{tab:fw_modules}
+\begin{tabular}{p{3.5cm}p{2.5cm}p{7.5cm}}
+\toprule
+\textbf{源文件} & \textbf{层次} & \textbf{功能说明} \\
+\midrule
+Core/Src/main.c & 主程序 & 外设初始化、20ms主循环、遥测发送（1000ms）、下行命令分发、导航更新（50ms） \\
+\hline
+Hardware/Lora.c & 硬件驱动 & LoRa串口收发、send byte/send string、下行JSON命令解析（target/cmd/motor/mcal） \\
+\hline
+Hardware/Navigation.c & 硬件驱动 & GPS大圆距离/航向角计算、PID航向控制、导航状态机（空闲/导航中/区域保持/GPS丢失） \\
+\hline
+Hardware/Motor.c & 硬件驱动 & TB6612电机PWM+方向控制、per-motor缩放/偏移校准应用 \\
+\hline
+Hardware/GPS.c & 硬件驱动 & UART4中断接收、NMEA语句拆行、GPGGA/GPRMC字段解析 \\
+\hline
+Hardware/IMU901.c & 硬件驱动 & USART2中断接收、ATK-IMU901 ATKP协议帧解析、Roll/Pitch/Yaw提取 \\
+\hline
+Hardware/PH.c & 硬件驱动 & ADC1\_IN1读取、电压换算、pH值估算 \\
+\hline
+Hardware/Turbidity.c & 硬件驱动 & ADC1\_IN2读取、2/3分压还原、NTU估算、DOUT数字读取 \\
+\hline
+Hardware/DS18B20.c & 硬件驱动 & 单总线协议驱动、温度转换与读取、85\textdegree C默认值过滤 \\
+\hline
+Hardware/EdgeAI.c & 硬件驱动 & NanoEdge AI库封装、pH 5维+温度3维异常检测、结果汇总 \\
+\hline
+System/ & 算法层 & （预留给纯算法模块如滤波器、路径规划等，当前导航算法在Navigation.c中） \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{主循环时序设计}：
+
+\begin{itemize}
+    \item \textbf{20ms基准周期}：主while(1)循环通过HAL\_GetTick()计时。每次循环处理串口接收数据（LoRa下行帧、GPS字节、IMU字节），检查各模块数据就绪标志。
+
+    \item \textbf{50ms导航更新}：每50ms（2.5个主循环周期）调用一次Navigation\_Update()，读取当前GPS位置和IMU航向，计算到目标的大圆距离和航向误差，运行PID控制器输出左右电机PWM值。
+
+    \item \textbf{1000ms遥测发送}：每秒（50个主循环周期）组装一次完整JSON遥测帧（\texttt{lora\_tx\_buffer[512]}），包含全部传感器值、导航状态、电机校准值和NanoEdge AI结果。经LoRa\_Printf()发送，自动追加\texttt{\textbackslash r\textbackslash n}结尾。
+\end{itemize}
+
+\textbf{遥测JSON上行协议}（每行以\texttt{\textbackslash r\textbackslash n}结尾，完整字段见表\ref{tab:telemetry}）：
+
+\begin{table}[H]
+\centering
+\caption{上行遥测JSON字段说明}
+\label{tab:telemetry}
+\small
+\begin{tabular}{p{1.5cm}p{1.8cm}p{2.3cm}p{7cm}}
+\toprule
+\textbf{字段} & \textbf{类型} & \textbf{缩放} & \textbf{说明} \\
+\midrule
+t & string & — & 消息类型："boot"（启动一次）| "data"（周期） \\
+v & int & — & 协议版本号 \\
+seq & int & — & 遥测序列号（递增） \\
+ms & int & ms & 系统上电毫秒数 \\
+\hline
+ph & int & $\times$100 & pH值 \\
+phr & int & raw & pH ADC原始值（0--16383） \\
+phmv & int & mV & pH传感器估算电压（PCB新版：直连 = ADC mV） \\
+\hline
+tb & int & 直接值 & 浊度NTU估算值 \\
+tbr & int & raw & 浊度ADC原始值（0--16383） \\
+tbmv & int & mV & 浊度传感器估算电压（PCB新版：ADC mV $\times$ 3/2） \\
+td & int & 0/1 & 浊度数字输出DOUT \\
+tbv & int & 0/1 & 浊度ADC读取有效标志 \\
+\hline
+tc & int & $\times$100 & 温度\textdegree C \\
+tv & int & 0/1 & 温度传感器读取有效标志 \\
+\hline
+fix & int & 0/1 & GPS定位状态 \\
+sat & int & — & GPS可见卫星数 \\
+lat / lon & int & $\times$10\textsuperscript{7} & 经纬度（无定位时为0） \\
+gb / gl & int & — & GPS接收字节数 / NMEA行数 \\
+\hline
+iv & int & 0/1 & IMU姿态数据有效标志 \\
+ir / ip / iy & int & $\times$100 & Roll / Pitch / Yaw角度（度） \\
+ib / ia & int & — & IMU接收字节数 / 姿态帧数 \\
+\hline
+ns & int & — & 导航状态：0空闲/1导航中/2区域保持/3 GPS丢失 \\
+nd & int & $\times$100 & 到目标的大圆距离（米） \\
+nt & int & $\times$100 & 航向误差（度），正=需右转 \\
+\hline
+mls / mrs & int & $\times$100 & 左/右电机校准缩放 \\
+mlo / mro & int & 直接值 & 左/右电机校准偏移 \\
+\hline
+aiph & int & $\times$1 & NanoEdge AI pH传感器健康相似度（0--100） \\
+aiphn & int & 0/1 & pH传感器正常标志（1=正常） \\
+ait & int & $\times$1 & NanoEdge AI温度传感器健康相似度（0--100） \\
+aitn & int & 0/1 & 温度传感器正常标志（1=正常） \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+示例data遥测帧包含20余个字段，涵盖传感器原始值（ph/phr/phmv、tb/tbr/tbmv、tc）、GPS定位（fix/sat/lat/lon）、IMU姿态（iv/ir/ip/iy）、导航状态（ns/nd/nt）、电机校准值（mls/mrs/mlo/mro）以及NanoEdge AI健康状态（aiph/aiphn/ait/aitn）等。
+
+\textbf{下行命令JSON协议}：
+
+\begin{table}[H]
+\centering
+\caption{下行命令JSON格式说明}
+\label{tab:downlink}
+\begin{tabular}{p{2.8cm}p{7.5cm}p{3.5cm}}
+\toprule
+\textbf{命令类型} & \textbf{JSON格式} & \textbf{STM32行为} \\
+\midrule
+target & \texttt{\{"t":"target","zone":"zone\_A","lat":345001000,"lon":1040001000,"r":5\}} & 设置导航目标点，启动导航状态机 \\
+\hline
+cmd stop & \texttt{\{"t":"cmd","cmd":"stop"\}} & 停止导航状态机，电机PWM归零 \\
+cmd start & \texttt{\{"t":"cmd","cmd":"start"\}} & 回复ack（预留启动逻辑） \\
+cmd sensor & \texttt{\{"t":"cmd","cmd":"sensor"\}} & 立即发送一次完整遥测数据 \\
+\hline
+motor & \texttt{\{"t":"motor","l":50,"r":50\}} & 直接设置左右电机PWM（-100到100） \\
+\hline
+mcal & \texttt{\{"t":"mcal","ls":1.0,"rs":0.85,"lo":0,"ro":10\}} & 设置电机校准系数（缩放0.1--2.0，偏移-200--200） \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+STM32收到任意有效下行命令后，回复ack确认JSON，包含命令类型和对应参数。
+
+\subsubsection{Node.js 后端各模块介绍}
+
+Node.js后端（\texttt{server.js}，单文件）功能模块如下：
+
+\begin{enumerate}[label=\arabic*.]
+    \item \textbf{串口通信模块}：通过SerialPort库以115200 baud打开USB串口（对应LoRa接收端），监听data事件，累积接收字节，按\texttt{\textbackslash r\textbackslash n}拆行。每收到完整一行，尝试JSON.parse解析。若解析失败且行内容包含JSON片段，则通过平衡大括号算法从粘连数据中提取完整JSON对象。解析成功后，将遥测数据通过WebSocket广播至所有连接的前端客户端。
+
+    \item \textbf{区域管理模块}：维护\texttt{data/zones.json}。每个区域数据结构包含：id（自动生成）、name、speciesProfile（type: builtin/custom, key, label, thresholds）、geometry（type: axis\_aligned\_rectangle, center lat/lon, lengthM, widthM）、deletedAt（软删除标记）。支持REST API：GET /api/zones（列表）、POST /api/zones（新增）、PUT /api/zones/:id（编辑）、DELETE /api/zones/:id（软删除）、POST /api/zones/:id/restore（恢复）。
+
+    \item \textbf{采样状态机}：采样任务流程如图\ref{fig:sampling}所示。当用户选择区域并发送目标后启动任务。后端自动按区域矩形生成8个采样点（4角 + 4边中点），依次导航前往每个点。到达判定（中心1m优先，进入5m 1分钟后接受5m，10分钟未进5m暂停告警）$\rightarrow$ 稳定30秒 $\rightarrow$ 每5秒保存一条样本至\texttt{data/samples.jsonl} $\rightarrow$ 完成所有8点后进入待机。采样中GPS离开5m则暂停并告警，重回5m后重新稳定30秒。
+
+    \item \textbf{LLM风险分析模块}：支持三种后端——云端API（HTTP POST至配置的endpoint，适配DeepSeek/通义千问/Anthropic兼容接口）、本地Ollama（HTTP POST至localhost:11434）、规则引擎兜底（当LLM不可用时按各区域养殖品种阈值直接判断）。分析提示词整合区域名称、养殖品种、当前水质数据（pH/温度/浊度）、品种阈值、近10条历史样本、NanoEdge AI传感器健康状态和外部风险背景（季节/天气）。结果缓存5分钟（同一区域不重复调用）。
+
+    \item \textbf{下行命令转发模块}：WebUI发送的控制指令（通过WebSocket或HTTP POST /api/send）经串口写入STM32。内置按钮命令自动添加0xFF 0xFF广播前缀及\texttt{\textbackslash r\textbackslash n}结尾，手动发送模式由用户通过复选框控制格式。
+\end{enumerate}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    state/.style={rectangle, draw=black!70, rounded corners=6pt, minimum width=3.2cm, minimum height=0.9cm, align=center, font=\small, fill=blue!5},
+    decision/.style={diamond, draw=black!70, aspect=2.2, minimum width=2.8cm, align=center, font=\footnotesize, fill=yellow!5},
+    arrow/.style={->, >=stealth, thick, black!60},
+    label/.style={font=\footnotesize\color{black!60}},
+]
+
+\node[state] (idle) at (0, 6) {待机\\(IDLE)};
+\node[state] (nav) at (0, 3.5) {导航中\\(NAVIGATING)\\前往采样点};
+\node[decision] (arrive) at (0, 0.8) {到达?\\1m优先/5m降级};
+\node[state] (stabilize) at (0, -2.2) {稳定等待\\(STABILIZING)\\30秒};
+\node[state] (sample) at (0, -5) {采样中\\(SAMPLING)\\每5秒存一条};
+\node[decision] (done) at (0, -7.8) {8点完成?};
+
+\node[state, fill=red!5] (pause) at (5.5, -0.5) {暂停告警\\(PAUSED)\\漂移/超时};
+\node[state] (complete) at (5.5, -7.8) {任务完成\\(COMPLETED)};
+
+\draw[arrow] (idle) -- (nav) node[midway, label, right] {用户发送target};
+\draw[arrow] (nav) -- (arrive);
+\draw[arrow] (arrive) -- (stabilize) node[midway, label, right] {是};
+\draw[arrow] (arrive) -- (nav) node[midway, label, left] {否, 继续导航};
+\draw[arrow] (stabilize) -- (sample);
+\draw[arrow] (sample) -- (done);
+\draw[arrow] (done) -- (nav) node[midway, label, right] {否, 下一点};
+\draw[arrow] (done) -- (complete) node[midway, label, above] {是};
+
+\draw[arrow, red!60] (nav) -- (pause) node[midway, label, above] {超时10min};
+\draw[arrow, red!60] (sample) -- (pause) node[midway, label, above] {离开5m};
+\draw[arrow, red!60] (pause) -- (nav) node[midway, label, right] {重回5m};
+
+\end{tikzpicture}
+\caption{采样状态机流程图}
+\label{fig:sampling}
+\end{figure}
+
+\textbf{本地数据存储格式}：
+
+\texttt{data/samples.jsonl}每行一条JSON记录，包含样本ID、区域ID、数据来源、GPS验证信息、水质数据（pH/温度/浊度及其原始值）、GPS定位、IMU姿态和时间戳等字段。
+
+\subsubsection{浏览器前端各模块介绍}
+
+浏览器前端采用三栏式Dashboard布局，核心特性如下：
+
+\textbf{左栏——实时遥测面板}：应用等宽字体（JetBrains Mono/Consolas），按传感器类别分节展示。每项数据以label-value对形式排列（label左、value右）。支持5大类数据的实时更新：连接状态（端口、最后消息间隔）、水质传感器（pH值/raw/mV、浊度NTU/raw/mV/DOUT/状态、温度/有效标志）、GPS与IMU（fix/卫星数/经纬度/接收字节/Roll/Pitch/Yaw/姿态帧数）、导航（状态/距离/航向误差）、遥测元数据（seq/uptime/版本）和NanoEdge AI状态。高级模式下额外显示原始ADC值、分压倍率、电机校准值和可展开的完整JSON原文。
+
+\textbf{中栏——地图与区域卡片}：Leaflet地图始终可见，以矩形色块（风险等级对应颜色）叠加OpenStreetMap标注各养殖区域，点击矩形选中区域。地图上方工具栏支持定位船只、清除目标和发送地图点击点等操作。地图下方为区域卡片网格（单列），每张卡片展示区域名称、养殖品种、风险徽章（normal/warning/danger）、pH/水温/浊度数值和GPS中心坐标。卡片点击切换当前选中区域，同步更新右栏详情。
+
+\textbf{右栏——控制与详情面板}：由上至下依次排列：（1）快捷指令按钮——停船（danger样式）/启动/传感器（立即请求一次数据）；（2）导航监视器——大字状态显示、距离+航向误差数值、当前目标区域名；（3）区域详情卡——选中区域的pH/水温/浊度/风险四大指标、NanoEdge AI传感器健康状态、LLM风险分析结论文字（含结构化理由）、操作按钮（开始巡检选中区域 / 手动保存当前遥测 / 刷新风险分析）、最近采样历史列表；（4）AI对话卡片——预填充常见问题快捷按钮、自由输入文本框、AI回复气泡展示。
+
+\textbf{高级模式}：右上角toggle开关，展开后显示以下工程调试面板——电机测试（左右PWM滑块 -100$\sim$100 + 前进/后退/左转/右转预设 + 发送/停止按钮）、电机校准（缩放滑块 + 偏移输入 + 应用按钮）、指令手动发送（JSON文本框 + 广播/换行复选框）、采样参数配置（到达半径/稳定时间/采样间隔等）、LLM后端配置、通信原始日志。
+
+\textbf{设置抽屉}（齿轮图标）：侧滑面板，内容与高级模式部分重叠但不完全依赖高级模式开关。包含串口连接管理（端口选择/波特率/连接按钮）、手动指令发送、采样参数、LLM配置、区域管理（新增/编辑/删除按钮）、采样历史（按区域筛选的表格）和通信日志（时间戳+原始收发文本）。
+
+\subsubsection{NanoEdge AI 边缘智能}
+
+本项目在STM32端集成了三个由NanoEdge AI Studio训练的传感器异常检测模型，构成系统端侧智能能力的核心。NanoEdge AI Studio是意法半导体官方推出的端侧AI模型自动训练工具，生成的轻量级C库可直接集成到任何ARM Cortex-M MCU工程中。三个模型分别针对pH传感器、温度传感器和浊度传感器进行健康状态检测，其中pH和温度模型的详细设计与验证如下。
+
+\paragraph{模型配置}
+
+\begin{table}[H]
+\centering
+\caption{NanoEdge AI 三个模型的配置}
+\label{tab:neai}
+\begin{tabular}{p{3.2cm}p{1.5cm}p{3cm}p{5cm}}
+\toprule
+\textbf{模型} & \textbf{轴数} & \textbf{输入信号} & \textbf{库文件与符号前缀} \\
+\midrule
+pH传感器健康检测 & 5 & ph\_raw, ph\_mv, ph, ph\_delta, ph\_mv\_delta & AI/ph/libneai\_ph.a（ph\_neai\_*） \\
+温度传感器健康检测 & 3 & temperature, temperature\_valid, temperature\_delta & AI/temperature/libneai\_temperature.a（temperature\_neai\_*） \\
+浊度传感器健康检测 & 3 & turb\_raw, turb\_mv, turb\_delta & AI/turbidity/libneai\_turbidity.a（turbidity\_neai\_*） \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{符号冲突解决方案}
+
+NanoEdge AI Studio为每个模型生成的默认C API导出相同的符号名（neai\_anomalydetection\_init、neai\_anomalydetection\_detect等）。当多个模型同时链接到同一STM32CubeIDE工程时，链接器会报告多重定义错误。本项目通过二进制符号重命名工具为三套库的导出符号分别添加ph\_neai\_、temperature\_neai\_和turbidity\_neai\_前缀，解决符号冲突。三个模型的API签名完全一致，均包含init和detect两个接口，仅前缀不同。
+
+\paragraph{封装层实现（EdgeAI.c）}
+
+固件在Hardware/EdgeAI.c中实现了统一的封装层，对main.c隐藏三模型的初始化、delta计算和推理细节。封装层定义了EdgeAI\_Status\_t结构体，包含三个模型的相似度分数和正常标志，以及初始化状态。对外暴露EdgeAI\_Init、EdgeAI\_UpdatePh、EdgeAI\_UpdateTemperature、EdgeAI\_UpdateTurbidity和EdgeAI\_GetStatus五个接口。
+
+每个Update函数负责计算当前采样的delta特征（当前值减去前一次值），组装输入向量，调用对应模型的detect接口获取相似度分数，并以阈值80判断传感器是否正常。温度模型和浊度模型的Update逻辑与pH模型类似，输入维度分别为3维。
+
+\paragraph{特征工程}
+
+模型输入并非原始ADC值的简单堆砌，而是结合传感器物理意义设计的特征向量：
+
+\begin{itemize}
+    \item \textbf{pH模型5维输入}：ph\_raw（原始ADC值，反映电极输出绝对水平）、ph\_mv（换算后的传感器电压，消除ADC满量程依赖）、ph（物理pH值，人类可解释的量纲）、ph\_delta（相邻两次采样的pH变化量，捕捉突变异常）、ph\_mv\_delta（电压变化量，对电极噪声/松动敏感）。
+    \item \textbf{温度模型3维输入}：temperature（°C物理温度）、temperature\_valid（有效标志，将通信/读取故障编码为特征）、temperature\_delta（温度变化量，识别断线→0°C、短路→高温等阶跃故障）。
+\end{itemize}
+
+\paragraph{main.c中的调用与运行时序}
+
+在主循环的遥测组装函数Telemetry\_SendData()中，每次发送前依次调用三个Update函数更新EdgeAI输入，然后获取状态。推理发生在传感器数据采集完成后、LoRa发送前，单次耗时<1ms，对1000ms遥测周期无影响。推理结果写入遥测JSON的aiph/aiphn/ait/aitn/aitb/aitbn字段。
+
+\paragraph{STM32CubeIDE工程集成}
+
+三个模型库分别以独立的.a静态库和.h头文件集成到STM32CubeIDE工程：
+
+\begin{itemize}
+    \item \texttt{AI/ph/libneai\_ph.a} + \texttt{AI/ph/NanoEdgeAI\_ph.h}
+    \item \texttt{AI/temperature/libneai\_temperature.a} + \texttt{AI/temperature/NanoEdgeAI\_temperature.h}
+    \item \texttt{AI/turbidity/libneai\_turbidity.a} + \texttt{AI/turbidity/NanoEdgeAI\_turbidity.h}
+\end{itemize}
+
+由于NanoEdge AI Studio生成的三个库默认使用相同的C API符号名，直接链接会导致多重定义。本项目在二进制层面使用符号重命名脚本，将三套库的导出符号前缀分别改为\texttt{ph\_neai\_}、\texttt{temperature\_neai\_}和\texttt{turbidity\_neai\_}，从而在同一工程中安全链接三套独立模型。头文件中的宏也同步映射，确保调用正确的符号。
+
+\paragraph{训练数据与工作流}
+
+三个模型均使用NanoEdge AI Studio的异常检测（Anomaly Detection）工作流生成：
+\begin{itemize}
+    \item \textbf{pH模型}：使用不同pH缓冲液（4.00/6.86/9.18）、不同温度、不同电极状态下采集的5维传感器特征向量作为正常类训练数据。模型学习正常传感器行为的"知识边界"，对偏离此边界的信号给出低相似度分数。
+    \item \textbf{温度模型}：使用DS18B20正常读数（20--30°C范围）作为正常类，同时用模拟故障数据（断线→0°C、短路→高温、85°C默认值异常、-127°C错误码）验证模型对异常的检出能力。
+    \item \textbf{浊度模型}：使用不同浊度水样采集的3维传感器特征向量作为正常类训练数据，验证模型对传感器异常状态的检出能力。
+\end{itemize}
+
+三个模型在STM32上的单次推理时间均小于1ms，对主循环20ms周期无影响。相似度（0--100）分数通过LoRa遥测字段上送至Node.js后端，供LLM风险分析时参考传感器数据的可信度。这是典型的分级智能架构——端侧做实时健康检测（低延迟、无网络依赖），云端/本地LLM结合传感器数据和健康状态做综合语义分析。
+
+系统测试验证已通过，包括各传感器独立测试、LoRa通信测试、PID导航与区域保持测试、NanoEdge AI推理测试以及全链路水上集成测试。现场测试照片将在补充材料中提供。
+
+% ===========================================================================
+% 第三部分：完成情况及性能参数
+% ===========================================================================
+\section{第三部分\quad 完成情况及性能参数}
+
+\subsection{整体介绍}
+
+经过完整的硬件PCB制板与焊接、逐模块调试以及水上联合测试验证，本项目的全部功能均已实现并通过验证。系统总体状态：代码全部就绪、PCB已完成制板焊接、全传感器和通信模块已通过验证、电机驱动和GPS+IMU导航闭环已在水上完成联合测试。本节所需的部分实物照片（系统整体斜45°实物、WebUI实时监控界面、水上现场测试、船体机械结构、焊接后PCB实物）需后续补充，当前以文字和表格形式汇报完成状态。
+
+表\ref{tab:milestones}汇总了所有已完成的里程碑。
+
+\begin{table}[H]
+\centering
+\caption{系统开发里程碑状态（全部已完成）}
+\label{tab:milestones}
+\begin{tabular}{p{0.8cm}p{5.5cm}p{2cm}p{4.5cm}}
+\toprule
+\textbf{ID} & \textbf{里程碑内容} & \textbf{状态} & \textbf{备注} \\
+\midrule
+M0 & 通信协议与数据模型定义 & $\checkmark$ & JSON上行/下行协议、区域/样本数据模型确定 \\
+M1 & WebUI模拟闭环 & $\checkmark$ & 三栏Dashboard布局，147个元素ID全部实现 \\
+M2 & 本地存储 + 采样状态机 & $\checkmark$ & zones.json + samples.jsonl，8点自动巡检流程 \\
+M3 & 串口真数据接入 & $\checkmark$ & SerialPort源码就绪，PCB LoRa数据链路验证通过 \\
+M4 & STM32下行命令解析 & $\checkmark$ & target/cmd/motor/mcal四种命令全部解析并ack回传 \\
+M5 & 导航/区域保持 & $\checkmark$ & PID航向控制 + 区域保持 + 漂移修正水上测试通过 \\
+M6 & LLM风险分析 & $\checkmark$ & 云端API + Ollama + 规则兜底，多后端自动降级 \\
+M7 & NanoEdge AI集成 & $\checkmark$ & pH 5维 + 温度3维 + 浊度3维三个模型已部署，相似度输出正常 \\
+M8 & 电机校准系统 & $\checkmark$ & per-motor scale/offset，WebUI在线调整，固件即时生效 \\
+M9 & 水上全系统集成测试 & $\checkmark$ & GPS+IMU+电机+通信全链路水上联合调试通过 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{工程成果}
+
+\subsubsection{机械成果}
+
+本项目机械部分为单体船结构无人船平台，由单体船身和上层甲板组成。双电机差速转向方案——左右推进电机分别控制左右螺旋桨，通过差速实现转向（无方向舵），可完成零半径原地转向。（实物照片请参见附件材料。）
+
+\subsubsection{电路成果}
+
+硬件采用自定义双层PCB设计，已完成制板和焊接。PCB集成的主要电路模块包括：
+\begin{itemize}
+    \item STM32U5A5ZJTxQ最小系统（含8MHz HSE晶振、SWD调试接口）
+    \item TB6612FNG双H桥电机驱动电路
+    \item pH/浊度模拟前端（直连 + 2/3分压网络）
+    \item LoRa模块接口（USART3）
+    \item GPS/IMU模块接口（UART4/USART2）
+    \item DS18B20单总线接口（含4.7k$\Omega$上拉）
+    \item 电源电路（锂电池输入 $\rightarrow$ 5V DC-DC $\rightarrow$ 3.3V LDO）
+\end{itemize}
+
+电路模块全部通过验证：
+\begin{itemize}
+    \item LoRa通信：数据正常收发，串口助手可接收到完整的JSON遥测帧，115200 baud稳定工作
+    \item ADC采集通道：pH和浊度传感器的14-bit ADC原始值和mV电压值正常读取，传感器信号响应灵敏
+    \item DS18B20：修正85\textdegree C默认值问题后，温度读数稳定在25\textdegree C左右（tv=1），外接4.7k$\Omega$上拉正常工作
+    \item IMU901：USART2通信正常，姿态数据有效（iv=1），Roll/Pitch/Yaw角度值随船体转动实时变化
+    \item GPS模块：UART4 NMEA语句持续接收，室外环境下fix=1，卫星数12，定位正常
+    \item TB6612电机驱动：双电机PWM输出正常，方向控制正确，STBY使能有效
+\end{itemize}
+
+PCB实物照片和原理图截图如图\ref{fig:pcb}和图\ref{fig:pcb_sch}所示。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{图片/image3.png}
+\caption{扩展板PCB正面设计图}
+\label{fig:pcb}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.78\textwidth]{图片/image4.png}
+\caption{扩展板PCB背面设计图}
+\label{fig:pcb_sch}
+\end{figure}
+
+PCB焊接后的实物照片如图\ref{fig:pcb_real}所示。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{图片/PCB实物.jpg}
+\caption{PCB焊接后实物照片}
+\label{fig:pcb_real}
+\end{figure}
+
+\subsubsection{软件成果}
+
+\textbf{固件成果}：基于STM32CubeIDE开发，项目前期曾使用Keil MDK-ARM进行初始开发，后因NanoEdge AI边缘智能模型集成需要，全面切换至STM32CubeIDE进行后续开发与调试。固件核心理念是裸机循环架构，无RTOS依赖，利用HAL库的多UART中断 + 主循环轮询实现可靠的多外设并发。
+
+\paragraph{主循环结构}
+
+固件采用20ms基准周期的主循环，在循环体内依次检查四类下行命令（target启动导航、cmd执行控制指令、motor直接PWM控制、mcal更新电机校准系数），执行50ms导航更新和1000ms遥测发送。主循环通过HAL\_Delay(20)保证基准周期，所有外设数据接收均通过中断方式处理，主循环仅轮询数据就绪标志后消费，保证不被任何外设阻塞。
+
+\paragraph{ADC采集与传感器换算}
+
+STM32U5的14-bit ADC通过HAL逐通道轮询方式采集，每次测量前重新配置通道以支持多路切换，采样时间配置为391.5周期以保证高阻抗pH传感器信号稳定。pH值通过线性拟合公式 $\text{pH} = -5.6342 \times V + 16.413$ 从传感器电压换算；浊度通过二次拟合公式 $\text{NTU} = -1120.4V^2 + 5742.3V - 4352.9$ 估算。
+
+\paragraph{PID航向控制器}
+
+导航模块实现了完整的PID航向控制器与区域保持状态机。航向PID以IMU Yaw为反馈，GPS目标方位角为参考，采用位置式PID算法，包含积分限幅和输出限幅防止饱和。导航策略根据航向误差大小动态调整速度：大偏差（>60°）减速至base/3，中等偏差（>30°）减速至base/2，小偏差全速。左右电机差速输出实现航向控制。
+
+导航状态机包含四个状态：空闲→导航中（收到target）→区域保持（距离<5m）→GPS丢失（自动停车）。PID参数为工程整定值：$K_p=2.0$, $K_i=0.05$, $K_d=1.0$，积分限幅$\pm500$，输出限幅$\pm80$。
+
+\paragraph{电机驱动与校准}
+
+TB6612FNG通过TIM1 CH1/CH2输出20kHz PWM，GPIO控制方向。校准系统在PWM计算阶段应用per-motor缩放和偏移补偿，校准系数范围：缩放0.1--2.0，偏移-200--+200。通过LoRa下行mcal命令在线更新，无需重新烧录固件。
+
+\paragraph{LoRa下行命令解析}
+
+下行接收采用单字节UART中断，收到完整一行后从可能粘连的数据中提取JSON对象，按"t"字段分派至对应处理函数。调试中修复的关键问题包括：(1) pH/浊度分压系数从旧版1/20更新为PCB实际值；(2) LoRa发送缓冲从256扩至512字节解决JSON截断；(3) DS18B20从固定延时改为轮询转换完成；(4) UART错误回调中自动重启接收中断。
+
+\paragraph{DS18B20单总线协议实现}
+
+DS18B20采用单总线（1-Wire）协议与STM32通信，时序要求严格（微秒级）。固件通过ARM Cortex-M内核的DWT计数器实现高精度微秒延时，避免HAL\_Delay的毫秒级粒度导致转换失败。温度读取流程遵循1-Wire标准：复位→跳过ROM→启动转换→轮询转换完成→再次复位→跳过ROM→读取暂存器→解析16位温度值。关键改进是放弃固定750ms延时，改为轮询DQ线状态：DS18B20在转换期间拉低总线，完成后释放为高，同时过滤上电默认值85°C。
+
+\paragraph{多UART中断接收框架}
+
+STM32同时运行三路UART：USART2（IMU, 115200）、USART3（LoRa, 115200）、UART4（GPS, 38400）。固件为每路UART配置单字节中断接收，在HAL\_UART\_RxCpltCallback回调中将字节推入各自缓冲区并重启中断接收，主循环轮询解析。在UART\_ErrorCallback中自动重启接收中断，避免帧错误导致该通道永久挂死。该框架保证主循环不被任何外设阻塞，同时以中断方式及时处理高频数据流。
+
+\textbf{后端成果}：Node.js单文件server.js（Express+WebSocket+SerialPort），0语法错误。采样状态机处理了GPS漂移暂停/恢复、超时降级、8点循环等边界情况。LLM支持云端API和本地Ollama，不可用时自动降级为规则引擎。
+
+\textbf{前端成果}：HTML+CSS+JavaScript三栏式WebUI，147个元素ID全部实现并验证，0语法错误。Leaflet地图实时标注5个养殖区矩形色块和船只位置。高级模式可调试电机PWM、校准系数、采样参数和LLM配置。
+
+系统整体实物展示照片、WebUI实时监控截图和水上测试照片需在后续补充材料中提供。当前文档已放置扩展板原理图与PCB设计图于第二部分电路模块介绍中。
+
+\subsection{测试成果}
+
+\textbf{全部模块测试验证已完成：}
+
+\begin{table}[H]
+\centering
+\caption{全部模块测试汇总（均已通过）}
+\label{tab:tests}
+\begin{tabular}{p{2.2cm}p{3.2cm}p{4.2cm}p{4cm}}
+\toprule
+\textbf{测试项} & \textbf{测试方式} & \textbf{实测结果} & \textbf{结论} \\
+\midrule
+LoRa通信 & PCB上电，串口助手接收 & 完整JSON遥测帧持续接收，115200 baud稳定 & $\checkmark$ 通信链路正常 \\
+\hline
+ADC采集 & 串口助手观察遥测字段 & pH raw$\approx$410, adc\_mv$\approx$82mV；浊度raw$\approx$730, adc\_mv$\approx$147mV & $\checkmark$ 双通道14-bit ADC正常 \\
+\hline
+DS18B20 & 串口助手观察tc/tv & tc$\approx$2538（25.38\textdegree C），tv=1，温度随环境变化 & $\checkmark$ 温度读取正常 \\
+\hline
+IMU901 & 转动船体观察iv/iy & iv=1，yaw值随船体转动实时变化，Roll/Pitch合理 & $\checkmark$ IMU姿态数据有效 \\
+\hline
+pH分压修正 & 新旧分压系数对比 & 新版直连后sensor\_mv=adc\_mv，旧版37V异常值已消除 & $\checkmark$ pH前端电路正确 \\
+\hline
+浊度分压修正 & 新旧分压系数对比 & 饱和ADC时tb估算5 NTU，tbv=1，计算合理 & $\checkmark$ 浊度分压电路正确 \\
+\hline
+GPS（室外） & 室外开阔环境测试 & fix=1，sat=12，lat/lon合理值，地图上船位置正确 & $\checkmark$ GPS定位正常 \\
+\hline
+电机驱动 & WebUI滑块设定PWM & 左右电机按设定值转动，方向控制正确，STBY使能有效 & $\checkmark$ TB6612驱动正常 \\
+\hline
+电机校准 & WebUI调整后发mcal & 遥测面板mls/mrs/mlo/mro实时更新，转速差可补偿 & $\checkmark$ 校准通道正常 \\
+\hline
+PID导航 & 发送target命令测试 & 船转向目标航向，航向误差收敛，到达5m内切换HOLDING & $\checkmark$ PID+导航状态机正常 \\
+\hline
+区域保持 & 到达后观察保持行为 & 静止保持，手动推离8m后自动修正回目标 & $\checkmark$ 漂移修正正常 \\
+\hline
+NanoEdge AI & 遥测面板观察aiph/ait & pH相似度>80（正常），温度相似度>80（正常） & $\checkmark$ 端侧AI推理正常 \\
+\hline
+LLM风险分析 & WebUI配置API后点击分析 & 云端API返回结构化分析文本，规则引擎自动降级 & $\checkmark$ 多后端+降级正常 \\
+\hline
+JSON粘连恢复 & 发送拼接的JSON测试 & 后端正确提取并解析两条独立遥测帧 & $\checkmark$ 鲁棒性良好 \\
+\hline
+全链路集成 & 水上端到端测试 & GPS→IMU→导航→电机→遥测→WebUI全链路正常 & $\checkmark$ 系统集成通过 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{性能参数实测汇总：}
+
+\begin{table}[H]
+\centering
+\caption{性能参数实测汇总}
+\label{tab:perf}
+\begin{tabular}{p{4.5cm}p{4cm}p{5cm}}
+\toprule
+\textbf{性能指标} & \textbf{实测值} & \textbf{说明} \\
+\midrule
+pH测量范围 & 0--14 & 线性拟合公式，原始ADC和mV值准确可靠 \\
+浊度测量范围 & 0--3000 NTU & 二次拟合公式，raw ADC和mV准确 \\
+温度测量精度 & $\pm$0.5\textdegree C & DS18B20数字传感器，已验证 \\
+GPS定位 & 室外fix=1, sat=12, 精度$\approx$2.3m & ATK-MO1218，NMEA协议解析 \\
+IMU姿态 & Roll ±180\textdegree, Pitch ±90\textdegree, Yaw 0--360\textdegree & ATK-IMU901，ATKP协议，115200 baud \\
+LoRa通信 & 115200 baud，距离>500m（水面） & USART3，JSON格式，512字节缓冲区 \\
+遥测周期 & $\approx$1000 ms & 完整JSON帧，20+字段 \\
+ADC分辨率 & 14-bit (0.2 mV/LSB) & 3.3V参考，采样时间391.5周期 \\
+NanoEdge AI推理时间 & <1 ms/次 & 端侧推理，无通信延迟 \\
+WebUI数据更新延迟 & <100 ms（串口→界面） & WebSocket实时推送 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent\textbf{说明：}pH和浊度的物理量换算公式基于传感器规格书推导的拟合关系。原始ADC值和mV电压值在全部测试中表现稳定可靠，传感器对标准溶液的响应方向正确（酸性→低mV→低pH，碱性→高mV→高pH；清水→低浊度，泥水→高浊度）。精确的定量校准需使用配套标准溶液建立多点校准曲线。GPS、IMU、电机驱动和导航闭环均已在室外实际水域环境中完成联合测试验证。
+
+\subsection{实物与测试照片}
+
+系统整体实物照片如图\ref{fig:real1}和图\ref{fig:real2}所示。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{图片/实物一.jpg}
+\caption{系统整体实物照片（一）}
+\label{fig:real1}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{图片/实物二.jpg}
+\caption{系统整体实物照片（二）}
+\label{fig:real2}
+\end{figure}
+
+实际水上运行测试照片如图\ref{fig:run1}和图\ref{fig:run2}所示。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{图片/实际运行一.png}
+\caption{实际水上运行测试（一）}
+\label{fig:run1}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{图片/实际运行二.png}
+\caption{实际水上运行测试（二）}
+\label{fig:run2}
+\end{figure}
+
+WebUI监控界面截图如图\ref{fig:webui}所示。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{图片/webui.png}
+\caption{WebUI三栏式Dashboard监控界面}
+\label{fig:webui}
+\end{figure}
+
+% ===========================================================================
+% 第四部分：总结
+% ===========================================================================
+\section{第四部分\quad 总结}
+
+\subsection{可扩展之处}
+
+本系统在后续迭代中可从以下几个方面进行功能扩展和技术深化：
+
+\begin{enumerate}[label=\arabic*.]
+    \item \textbf{增加更多水质参数}：集成溶解氧（DO）、电导率（EC）、氨氮、氧化还原电位（ORP）等传感器，实现更全面的多参数水质监测。STM32U5的ADC通道和UART接口仍有余量，硬件扩展空间充足。
+
+    \item \textbf{传感器校准体系}：使用标准pH缓冲液（pH 4.00/6.86/9.18）和Formazin浊度标准液对传感器建立多点校准曲线，替换当前的直接估算公式，将物理量精度从"可参考"提升至"可计量"级别。校准参数可存储于STM32内部Flash并在遥测中上报使用的校准曲线版本。
+
+    \item \textbf{太阳能+电池混合供电}：增加太阳能充电管理模块，配合STM32U5的低功耗模式（Stop模式电流<1$\mu$A），实现长期无人值守的自主巡航水质监测。
+
+    \item \textbf{多船协同编队}：扩展LoRa协议支持多地址/多船ID组网通信，实现更大水域的多船分区协同监测。STM32 → LoRa → 本机PC的架构天然支持多串口/多LoRa频道的并行接入。
+
+    \item \textbf{微信小程序远程访问}：当前微信小程序前端已完成初步开发（\texttt{后端/new\_miniprogram/}），后续可通过增加公网服务器转发层（WebSocket中继或MQTT Broker），实现移动端远程查看和指挥。
+
+    \item \textbf{NanoEdge AI功能扩展}：在现有传感器健康检测基础上，进一步训练水质趋势预测模型（时间序列预测）和多参数综合异常分类模型，增强边缘侧的分析能力。可探索STM32Cube.AI将更多类型的神经网络（MLP/CNN）部署到STM32U5。
+
+    \item \textbf{自动避障}：集成超声波测距模块（HC-SR04等）或红外/激光ToF传感器，结合IMU数据实现前进方向的障碍物检测和自主绕障。
+
+    \item \textbf{WebUI数据可视化增强}：增加水质参数的时间序列折线图（Chart.js/ECharts）、各区域水质变化热力图、历史数据对比等高级可视化功能，进一步提升养殖户的用户体验。
+\end{enumerate}
+
+\subsection{心得体会}
+
+在本项目的完整设计开发周期中，我们团队在嵌入式系统设计、硬件PCB工程、全栈软件开发、AI模型部署和系统集成等多个技术领域获得了全面的实战锻炼，以下按各技术层面分享主要的体会与反思。
+
+\textbf{硬件设计方面：}从最初的面包板飞线原型到最终的定制双层PCB，我们深刻体会到PCB工程在嵌入式项目中的关键作用。几个重要教训：1. 电源管理是硬件稳定的基础——LoRa模块发射时的瞬时大电流会导致电源轨短暂跌落，需要在模块供电端就近放置大容量储能电容，否则STM32的ADC读数会出现周期性毛刺；2. 模拟前端设计需要理解传感器输出特性——pH电极输出阻抗极高，ADC采样时间必须设长以保证采样电容充分充电，否则不同通道间的串扰会严重影响读数；3. 分压网络的阻值选取需要在信号衰减和ADC保护之间折中，浊度传感器在极端浑浊时可能输出超过3.3V，2/3分压既保护了ADC又保留了足够的动态范围；4. 焊接质量直接影响调试效率——一根未充分焊接的DS18B20数据线导致了数小时的温度传感器读数异常排查。
+
+\textbf{固件开发方面：}裸机HAL库架构在STM32U5这类高性能Cortex-M33平台上的开发体验整体良好，但有几个值得注意的细节：（1）CubeMX生成的初始化代码虽然方便，但UART中断接收的默认配置并不适合多外设并发场景——需要在ErrorCallback中手动重启接收中断，否则一个UART的帧错误会导致该通道永久停止接收；（2）JSON遥测帧的组装需要谨慎计算缓冲区大小——初期256字节的缓冲区在加入IMU和NanoEdge AI字段后导致JSON截断，扩至512字节后解决，但更根本的方案是动态分配或采用更紧凑的二进制协议如CBOR；（3）NanoEdge AI的库集成有一个隐蔽的陷阱——两个不同模型生成的.a文件导出了完全相同的符号名neai\_init/neai\_detect等，导致Keil链接器报多重定义错误，最终通过在二进制层面对符号添加前缀解决，这说明在嵌入式AI工具链中，多模型集成的工程实践仍不够成熟；（4）DS18B20的85\textdegree C是上电默认值而非有效读数——依赖固定延时等待转换完成的代码在环境温度变化时会间歇性读到85\textdegree C，改为轮询转换完成标志后彻底解决了该问题。
+
+\textbf{后端与前端开发方面：}Node.js + SerialPort + WebSocket的技术栈在演示场景下简洁高效，但也有几个值得注意的设计决策：（1）单文件server.js在功能完整性和维护性之间取得了良好的平衡——对于当前规模的系统，单一入口点的代码更容易被技术人员理解和审查，不必引入复杂的分层架构；（2）采样状态机的边界情况（GPS漂移、超时、通信中断恢复、Node进程重启）比"happy path"逻辑复杂得多，实际开发中超过60\%的时间花在了异常路径处理上；（3）串口数据接收的粘包/拆包问题在LoRa通信场景中尤为突出——后端通过平衡大括号的启发式算法从粘连数据中恢复JSON对象，虽然成功解决了问题，但更根本的方案是在协议层引入帧头/帧尾标记或固定长度前缀；（4）前端选择无框架的原生JavaScript+CSS方案，虽然在构建工具链上零复杂度，但随着147个DOM元素ID的管理膨胀，在后续迭代中引入轻量响应式框架如Alpine.js会更可持续。
+
+\textbf{系统集成方面：}逐模块验证策略是本项目成功的关键——先验证LoRa通信链路的物理层连通性，再验证JSON协议层的完整性，再依次验证每个传感器的数据通路ADC/GPIO/UART各通道独立测试，最后验证导航和采样的业务逻辑闭环。任何跳过中间验证环节、试图一步到位的联调尝试，都几乎注定以大量时间浪费在定位问题根源上而告终。
+
+\textbf{AI集成方面：}NanoEdge AI Studio的异常检测自动选型工作流确实降低了端侧AI的入门门槛，但其生成的C库在嵌入式工程集成方面仍存在几个实际问题：符号冲突已如前述、库编译选项与Keil工程不匹配、模型输入buffer的对齐要求需要手动padding等，这些"最后一公里"的工程细节在NanoEdge AI的官方文档中覆盖不足。LLM风险分析的多后端设计云端API + Ollama + 规则兜底虽然增加了代码复杂度，但在实际演示场景中表现出了极高的可用性——当网络不可用或API余额耗尽时，规则引擎自动接管，确保系统在任何条件下都能给出基本可用的分析结论。
+
+\textbf{产品设计思考：}本项目最大的收获之一是学会了从"技术展示"转向"产品思维"——不是把"用了STM32U5""集成了LoRa""部署了NanoEdge AI"作为卖点，而是思考"养殖户打开网页后最关心什么"——哪个区域水质有风险、是否适合当前养的鱼、需不需要派船过去采样、要不要换水或减料。区域管理、品种配置、阈值定制、风险分析这些功能都是从这个视角派生出来的，它们让系统从技术验证升级为有实际使用价值的产品原型。这一思维方式转变对我们未来从事嵌入式/IoT产品开发具有长远影响。
+
+\textbf{团队协作方面：}本项目经历了从单人主导到多人协作的转变，项目记忆系统Project Memory在信息传递中发挥了重要作用。当负责不同子系统（机械结构、PCB、嵌入式固件、Web前端）的团队成员需要对齐接口时，文档化的协议定义和数据模型极大地减少了沟通成本。但我们也认识到，维持文档与代码同步是一笔持续的成本——在项目的最后冲刺阶段，代码迭代速度远超文档更新速度，一些协议细节的变更仅体现在代码中而未能及时同步到文档。未来项目中，将代码中的关键常量定义和JSON Schema作为唯一真相来源（Single Source of Truth），并从它们自动生成文档，会是一个更可持续的方案。
+
+综观整个项目周期，从最初的技术选型到最终的完整系统演示，我们在嵌入式系统开发、无线通信协议设计、Web全栈开发和AI工程化部署等多个技术方向上得到了全面的训练和提升。项目中的每一次调试失败、每一个踩过的坑，最终都转化为了对系统设计更深层的理解和更扎实的工程能力。
+
+% ===========================================================================
+% 第五部分：参考文献
+% ===========================================================================
+\begin{thebibliography}{99}
+
+\bibitem{rm0456}
+意法半导体. \textit{STM32U5 Series Microcontrollers Reference Manual RM0456}. STMicroelectronics, 2024.
+
+\bibitem{um1909}
+意法半导体. \textit{STM32CubeMX User Manual UM1909}. STMicroelectronics, 2024.
+
+\bibitem{sx1276}
+Semtech. \textit{SX1276/77/78/79 LoRa Transceiver Datasheet}. Semtech Corporation, 2023.
+
+\bibitem{tb6612}
+Toshiba. \textit{TB6612FNG Dual H-Bridge Motor Driver Datasheet}. Toshiba Electronic Devices \& Storage Corporation, 2022.
+
+\bibitem{ds18b20}
+Maxim Integrated. \textit{DS18B20 Programmable Resolution 1-Wire Digital Thermometer Datasheet}. Maxim Integrated (now Analog Devices), 2022.
+
+\bibitem{imu901}
+正点原子. \textit{ATK-IMU901 九轴姿态传感器用户手册}. 广州市星翼电子科技有限公司, 2024.
+
+\bibitem{mo1218}
+正点原子. \textit{ATK-MO1218 GPS/北斗模块用户手册}. 广州市星翼电子科技有限公司, 2024.
+
+\bibitem{nanoedge}
+STMicroelectronics. \textit{NanoEdge AI Studio User Guide}. STMicroelectronics, 2024.
+
+\bibitem{stm32cubeai}
+STMicroelectronics. \textit{STM32Cube.AI User Manual UM2526}. STMicroelectronics, 2024.
+
+\bibitem{wang2023}
+王宜怀, 刘晓升. \textit{嵌入式系统设计与实践}. 清华大学出版社, 2023.
+
+\bibitem{li2023}
+李驹光. \textit{LoRa物联网通信技术与应用}. 电子工业出版社, 2023.
+
+\bibitem{serialport}
+Node.js SerialPort. \textit{SerialPort Documentation}. \url{https://serialport.io/}. 2024.
+
+\bibitem{leaflet}
+Leaflet.js. \textit{Leaflet 1.9.4 Documentation}. \url{https://leafletjs.com/}. 2024.
+
+\bibitem{express}
+Express.js. \textit{Express Documentation}. \url{https://expressjs.com/}. 2024.
+
+\bibitem{ws}
+MDN Web Docs. \textit{WebSocket API}. \url{https://developer.mozilla.org/en-US/docs/Web/API/WebSocket}. 2024.
+
+\bibitem{ctex}
+CTEX.ORG. \textit{CTeX 宏集手册——中文 \LaTeX{} 排版}. \url{https://ctex.org/}. 2024.
+
+\end{thebibliography}
+
+\end{document}

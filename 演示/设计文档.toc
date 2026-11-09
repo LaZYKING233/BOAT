@@ -1,0 +1,46 @@
+\contentsline {section}{摘要}{1}{Doc-Start}%
+\contentsline {section}{目录}{2}{Doc-Start}%
+\contentsline {section}{\numberline {1}第一部分\hskip 1em\relax 作品概述}{3}{section.1}%
+\contentsline {subsection}{\numberline {1.1}功能与特性}{3}{subsection.1.1}%
+\contentsline {subsection}{\numberline {1.2}应用领域}{4}{subsection.1.2}%
+\contentsline {subsection}{\numberline {1.3}主要技术特点}{4}{subsection.1.3}%
+\contentsline {subsection}{\numberline {1.4}主要性能指标}{5}{subsection.1.4}%
+\contentsline {subsection}{\numberline {1.5}主要创新点}{6}{subsection.1.5}%
+\contentsline {subsection}{\numberline {1.6}设计流程}{6}{subsection.1.6}%
+\contentsline {section}{\numberline {2}第二部分\hskip 1em\relax 系统组成及功能说明}{7}{section.2}%
+\contentsline {subsection}{\numberline {2.1}整体介绍}{7}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}硬件系统介绍}{8}{subsection.2.2}%
+\contentsline {subsubsection}{\numberline {2.2.1}硬件整体介绍}{8}{subsubsection.2.2.1}%
+\contentsline {subsubsection}{\numberline {2.2.2}机械设计介绍}{10}{subsubsection.2.2.2}%
+\contentsline {subsubsection}{\numberline {2.2.3}电路各模块介绍}{11}{subsubsection.2.2.3}%
+\contentsline {subsection}{\numberline {2.3}软件系统介绍}{15}{subsection.2.3}%
+\contentsline {subsubsection}{\numberline {2.3.1}软件整体介绍}{15}{subsubsection.2.3.1}%
+\contentsline {subsubsection}{\numberline {2.3.2}嵌入式固件各模块介绍}{15}{subsubsection.2.3.2}%
+\contentsline {subsubsection}{\numberline {2.3.3}Node.js 后端各模块介绍}{19}{subsubsection.2.3.3}%
+\contentsline {subsubsection}{\numberline {2.3.4}浏览器前端各模块介绍}{21}{subsubsection.2.3.4}%
+\contentsline {subsubsection}{\numberline {2.3.5}NanoEdge AI 边缘智能}{22}{subsubsection.2.3.5}%
+\contentsline {paragraph}{模型配置}{23}{table.caption.16}%
+\contentsline {paragraph}{符号冲突解决方案}{23}{paragraph*.17}%
+\contentsline {paragraph}{封装层实现（EdgeAI.c）}{23}{paragraph*.18}%
+\contentsline {paragraph}{特征工程}{23}{paragraph*.19}%
+\contentsline {paragraph}{main.c中的调用与运行时序}{24}{paragraph*.20}%
+\contentsline {paragraph}{STM32CubeIDE工程集成}{24}{paragraph*.21}%
+\contentsline {paragraph}{训练数据与工作流}{24}{paragraph*.22}%
+\contentsline {section}{\numberline {3}第三部分\hskip 1em\relax 完成情况及性能参数}{25}{section.3}%
+\contentsline {subsection}{\numberline {3.1}整体介绍}{25}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}工程成果}{26}{subsection.3.2}%
+\contentsline {subsubsection}{\numberline {3.2.1}机械成果}{26}{subsubsection.3.2.1}%
+\contentsline {subsubsection}{\numberline {3.2.2}电路成果}{27}{subsubsection.3.2.2}%
+\contentsline {subsubsection}{\numberline {3.2.3}软件成果}{30}{subsubsection.3.2.3}%
+\contentsline {paragraph}{主循环结构}{30}{paragraph*.27}%
+\contentsline {paragraph}{ADC采集与传感器换算}{30}{paragraph*.28}%
+\contentsline {paragraph}{PID航向控制器}{30}{paragraph*.29}%
+\contentsline {paragraph}{电机驱动与校准}{31}{paragraph*.30}%
+\contentsline {paragraph}{LoRa下行命令解析}{31}{paragraph*.31}%
+\contentsline {paragraph}{DS18B20单总线协议实现}{31}{paragraph*.32}%
+\contentsline {paragraph}{多UART中断接收框架}{31}{paragraph*.33}%
+\contentsline {subsection}{\numberline {3.3}测试成果}{32}{subsection.3.3}%
+\contentsline {subsection}{\numberline {3.4}实物与测试照片}{34}{subsection.3.4}%
+\contentsline {section}{\numberline {4}第四部分\hskip 1em\relax 总结}{37}{section.4}%
+\contentsline {subsection}{\numberline {4.1}可扩展之处}{37}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}心得体会}{37}{subsection.4.2}%

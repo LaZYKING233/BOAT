@@ -1,0 +1,12 @@
+- [Boat current hardware](boat-current-hardware.md) — physical wiring and connected modules as of 2026-06-03
+- [Boat plan and competition context](boat-plan-and-competition-context.md) — proposal goals and ST赛道 alignment
+- [Boat code state 2026-06-03](boat-code-state-2026-06-03.md) — firmware structure, build state, and likely bring-up issues
+- [Boat code state 2026-06-08](boat-code-state-2026-06-08.md) — current firmware+WebUI state, motor calibration, three-panel UI, handoff status
+- [Boat PCB bringup 2026-06-14](boat-pcb-bringup-2026-06-14.md) — PCB divider changes, current project repair, and remaining DS18B20 issue
+- [Boat workflow preferences](boat-workflow-preferences.md) — CubeMX pin workflow and code-editing preference
+- [Boat team scope](boat-team-scope.md) — user's responsibility boundaries in the team
+- [Boat sensor bringup status](boat-sensor-bringup-status.md) — sensor status, historical divider note, current PCB scaling, and LoRa GUI info
+- [Boat WebUI product direction 2026-06-06](boat-webui-product-direction-2026-06-06.md) — farmer-facing WebUI/backend product role and final demo direction
+- [Boat zone attribution and control 2026-06-06](boat-zone-attribution-and-control-2026-06-06.md) — fixed-area sample ownership and station-keeping requirement
+- [Boat zone species config 2026-06-06](boat-zone-species-config-2026-06-06.md) — per-zone cultured species/object configuration for thresholds and LLM analysis
+- [Boat product plan 2026-06-06](boat-product-plan-2026-06-06.md) — lightweight product plan document and vertical-slice implementation strategy

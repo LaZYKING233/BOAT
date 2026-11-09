@@ -1,0 +1,62 @@
+/* network-test.wxss */
+.container {
+  padding: 20rpx;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.label {
+  width: 120rpx;
+  font-size: 28rpx;
+}
+
+.input {
+  flex: 1;
+  border: 1px solid #ddd;
+  border-radius: 8rpx;
+  padding: 12rpx;
+  font-size: 28rpx;
+}
+
+.btn-row {
+  display: flex;
+  margin-bottom: 20rpx;
+}
+
+.btn-row button {
+  flex: 1;
+  margin: 0 10rpx;
+}
+
+.status {
+  margin-bottom: 20rpx;
+  font-size: 28rpx;
+  color: #666;
+}
+
+.log-header {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 20rpx;
+  font-size: 28rpx;
+  color: #333;
+}
+
+.clear {
+  color: #576b95;
+}
+
+.log {
+  margin-top: 10rpx;
+  height: 600rpx;
+  border: 1px solid #ddd;
+  border-radius: 8rpx;
+  padding: 12rpx;
+  font-size: 26rpx;
+  white-space: pre-wrap;
+  background: #fafafa;
+}

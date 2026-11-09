@@ -1,0 +1,58 @@
+# ============================================================
+# 智航清泓 / BOAT — Git 忽略规则
+# 原则：只追踪源码、工程配置、文档和构建必需的小文件
+# ============================================================
+
+# ---------- 编译产物（保留 CubeIDE 的 makefile 等工程文件）----------
+Debug/*.elf
+Debug/*.elf.bak
+Debug/*.map
+Debug/*.list
+Debug/*.bin
+Debug/**/*.o
+Debug/**/*.d
+Debug/**/*.su
+Debug/**/*.cyclo
+MDK-ARM/BOAT/
+*.o
+*.d
+*.su
+*.cyclo
+*.elf
+*.hex
+*.axf
+
+# ---------- 依赖 ----------
+node_modules/
+
+# ---------- 大体积媒体与压缩包 ----------
+*.mp4
+*.rar
+*.zip
+*.pdf
+*.docx
+*.pptx
+*.jpg
+*.jpeg
+*.png
+*.bmp
+
+# 例外：NanoEdge AI 模型包是构建依赖，必须保留
+!AI/**/*.zip
+
+# ---------- 参赛资料 / 非代码素材 ----------
+IOT/
+output/
+资料/
+tmp/
+演示/视频/
+演示/中转/
+演示/图片/
+演示/extracted_images/
+演示/分镜/
+
+# ---------- 系统 ----------
+Thumbs.db
+desktop.ini
+.DS_Store
+*.tmp

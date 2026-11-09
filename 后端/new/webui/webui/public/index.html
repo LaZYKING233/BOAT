@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="养殖水质无人船实时监控、区域巡检与采样分析平台">
+  <title>智渔巡航 · 水质无人船监控平台</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23f4eee3'/%3E%3Cpath d='M12 37c7-8 13-8 20 0s13 8 20 0M12 26c7-8 13-8 20 0s13 8 20 0' fill='none' stroke='%23477a55' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"><i data-lucide="waves"></i></div>
+        <div><strong>智渔巡航</strong><span>AquaPilot Console</span></div>
+      </div>
+      <nav class="nav" aria-label="主导航">
+        <button class="nav-item active" data-view="overview"><i data-lucide="layout-dashboard"></i><span>总览监控</span></button>
+        <button class="nav-item" data-view="regions"><i data-lucide="map"></i><span>养殖区域</span><b id="zoneCount">0</b></button>
+        <button class="nav-item" data-view="tasks"><i data-lucide="route"></i><span>巡检任务</span><b id="taskCount">0</b></button>
+        <button class="nav-item" data-view="samples"><i data-lucide="database"></i><span>采样记录</span></button>
+        <button class="nav-item" data-view="advice"><i data-lucide="sparkles"></i><span>养殖建议</span></button>
+        <div class="nav-divider">设备与系统</div>
+        <button class="nav-item" data-view="connection"><i data-lucide="cable"></i><span>连接管理</span></button>
+        <button class="nav-item advanced-only" data-view="control"><i data-lucide="gamepad-2"></i><span>船体控制</span></button>
+        <button class="nav-item advanced-only" data-view="diagnostics"><i data-lucide="activity"></i><span>通信诊断</span></button>
+        <button class="nav-item advanced-only" data-view="settings"><i data-lucide="settings-2"></i><span>高级设置</span></button>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="device-mini">
+          <span class="device-icon"><i data-lucide="ship"></i></span>
+          <div><strong id="sidebarDevice">等待设备</strong><span><i class="status-dot" id="sidebarDot"></i><span id="sidebarDeviceState">串口未连接</span></span></div>
+          <button class="icon-btn" data-view-jump="connection" aria-label="打开连接管理"><i data-lucide="chevron-right"></i></button>
+        </div>
+        <div class="version">实时 REST / WebSocket 控制台</div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="icon-btn mobile-menu" id="menuBtn" aria-label="打开导航"><i data-lucide="menu"></i></button>
+          <div><p class="eyebrow" id="pageEyebrow">实时作业中心</p><h1 id="pageTitle">水质巡检总览</h1></div>
+        </div>
+        <div class="topbar-actions">
+          <div class="freshness-chip" id="telemetryFreshChip"><i></i><span>遥测</span><b id="telemetryFreshText">等待</b></div>
+          <label class="mode-switch"><span>高级模式</span><input type="checkbox" id="advancedToggle"><i></i></label>
+          <button class="icon-btn" data-view-jump="settings" aria-label="打开设置"><i data-lucide="settings-2"></i></button>
+        </div>
+      </header>
+
+      <div class="content">
+        <section class="view active" id="view-overview">
+          <div class="status-strip" aria-label="连接状态">
+            <div class="status-summary"><span class="summary-icon success"><i data-lucide="radio-tower"></i></span><div><span>WebSocket</span><strong id="wsStatusText">等待连接</strong></div><small id="wsAge">—</small></div>
+            <div class="status-summary"><span class="summary-icon cyan"><i data-lucide="usb"></i></span><div><span>串口设备</span><strong id="serialStatusText">未连接</strong></div><small id="serialPortText">—</small></div>
+            <div class="status-summary"><span class="summary-icon blue"><i data-lucide="activity"></i></span><div><span>遥测数据</span><strong id="dataStatusText">等待数据</strong></div><small id="dataAge">—</small></div>
+            <div class="strip-actions">
+              <button class="btn danger-outline" id="globalStopBtn" disabled><i data-lucide="circle-stop"></i>停止船体</button>
+              <button class="btn secondary" data-action="center-boat"><i data-lucide="locate-fixed"></i>定位船只</button>
+              <button class="btn primary" data-action="new-inspection"><i data-lucide="navigation"></i>发起巡检</button>
+            </div>
+          </div>
+
+          <div class="kpi-grid">
+            <article class="kpi-card"><div class="kpi-head"><span><i data-lucide="flask-conical"></i>pH 值</span><span class="trust" id="phTrust">等待</span></div><div class="kpi-value"><strong id="phValue">—</strong><small>pH</small></div><div class="range-row"><span id="phRange">选择区域后显示阈值</span><b id="phState">等待</b></div><div class="sparkline" id="phSpark" aria-label="浏览器会话 pH 短期趋势"></div></article>
+            <article class="kpi-card"><div class="kpi-head"><span><i data-lucide="thermometer"></i>水温</span><span class="trust" id="tempTrust">等待</span></div><div class="kpi-value"><strong id="tempValue">—</strong><small>°C</small></div><div class="range-row"><span id="tempRange">选择区域后显示阈值</span><b id="tempState">等待</b></div><div class="sparkline" id="tempSpark" aria-label="浏览器会话水温短期趋势"></div></article>
+            <article class="kpi-card"><div class="kpi-head"><span><i data-lucide="droplets"></i>浊度</span><span class="trust" id="turbTrust">等待</span></div><div class="kpi-value"><strong id="turbidityValue">—</strong><small>NTU</small></div><div class="range-row"><span id="turbRange">选择区域后显示阈值</span><b id="turbState">等待</b></div><div class="sparkline" id="turbSpark" aria-label="浏览器会话浊度短期趋势"></div></article>
+            <article class="kpi-card"><div class="kpi-head"><span><i data-lucide="compass"></i>导航状态</span><span class="trust" id="navTrust">等待</span></div><div class="nav-metrics"><div><strong id="distanceValue">—</strong><small>m 到目标</small></div><div><strong id="yawValue">—</strong><small>当前航向</small></div></div><div class="range-row"><span>航向误差</span><b id="headingError">—</b></div><div class="progress"><i id="navProgress"></i></div></article>
+          </div>
+
+          <div class="dashboard-grid">
+            <article class="panel map-panel">
+              <div class="panel-head"><div><p class="eyebrow">LIVE GEO MAP</p><h2>养殖区与无人船定位</h2></div><div class="map-tools"><button class="seg-btn active" data-map-layer="standard">标准</button><button class="seg-btn" data-map-layer="fallback">底图降级</button><button class="icon-btn" data-action="center-boat" aria-label="定位船只"><i data-lucide="crosshair"></i></button><button class="icon-btn" data-action="clear-target" aria-label="清除目标"><i data-lucide="map-pin-x"></i></button></div></div>
+              <div class="map-shell"><div class="map-fallback" aria-hidden="true"></div><div id="mapCanvas" class="map" aria-label="Leaflet 养殖水域地图"></div><div class="map-tip"><i data-lucide="mouse-pointer-click"></i>点击地图设置临时目标点</div></div>
+              <div class="map-legend"><span><i class="legend-box normal"></i>正常</span><span><i class="legend-box warning"></i>预警</span><span><i class="legend-box danger"></i>危险</span><span><i class="legend-box empty"></i>未采样</span><b id="mapCoordinate">坐标 —</b></div>
+              <div class="map-send-row"><span id="targetSummary">尚未选择地图目标</span><button class="btn primary" id="sendMapTargetBtn" disabled>发送地图点</button></div>
+            </article>
+
+            <aside class="right-stack">
+              <article class="panel selected-region">
+                <div class="panel-head compact"><div><p class="eyebrow">SELECTED AREA</p><h2 id="regionName">等待区域</h2></div><span class="risk-badge unknown" id="regionRisk">未选择</span></div>
+                <div class="region-meta"><span><i data-lucide="fish-symbol"></i>养殖对象：<b id="regionSpecies">—</b></span><span><i data-lucide="clock-3"></i>最近采样：<b id="regionSampleTime">—</b></span></div>
+                <div class="mini-data"><div><span>pH</span><strong id="regionPh">—</strong></div><div><span>水温</span><strong id="regionTemp">—</strong></div><div><span>浊度</span><strong id="regionTurbidity">—</strong></div></div>
+                <div class="risk-reason" id="riskReason"><p><strong>等待数据</strong><span>选择区域并等待真实采样数据。</span></p></div>
+                <div class="button-row"><button class="btn secondary" data-action="refresh-risk">刷新风险</button><button class="btn primary" data-action="inspect-region">巡检该区域</button></div>
+              </article>
+              <article class="panel mission-card">
+                <div class="panel-head compact"><div><p class="eyebrow">ACTIVE MISSION</p><h2 id="missionTitle">当前无任务</h2></div><button class="text-btn danger" id="cancelTaskBtn" disabled>取消</button></div>
+                <div class="mission-stage" id="missionStage"><span>1</span><i></i><span>2</span><i></i><span>3</span><i></i><span>4</span></div>
+                <div class="stage-labels"><b>下发</b><b>前往</b><b>稳定</b><b>采样</b></div>
+                <div class="mission-info"><span id="missionPhase">待机</span><span id="missionPoint">—</span></div>
+                <div class="mission-warning" id="missionWarning" hidden></div>
+                <button class="btn secondary full" id="retryTargetBtn" hidden>重试发送目标</button>
+              </article>
+            </aside>
+          </div>
+
+          <div class="lower-grid">
+            <article class="panel trend-panel">
+              <div class="panel-head"><div><p class="eyebrow">24H PERSISTED SAMPLES</p><h2 id="trendTitle">选中区域 24 小时水质趋势</h2></div><div class="legend"><span><i class="line-ph"></i>pH</span><span><i class="line-temp"></i>水温</span><span><i class="line-turb"></i>浊度</span></div></div>
+              <div class="chart-wrap" id="trendChart" role="img" aria-label="选中区域最近 24 小时持久化采样趋势"></div>
+              <button class="chart-table-toggle" id="trendTableToggle" aria-expanded="false">查看数据表</button>
+              <div class="chart-table" id="chartTable"><table><caption class="sr-only">选中区域最近 24 小时采样数据</caption><thead><tr><th>时间</th><th>来源</th><th>pH</th><th>水温 °C</th><th>浊度 NTU</th></tr></thead><tbody id="trendTableBody"></tbody></table></div>
+            </article>
+            <article class="panel telemetry-panel-card">
+              <div class="panel-head"><div><p class="eyebrow">TELEMETRY</p><h2>船体实时遥测</h2></div><span class="packet">SEQ <b id="packetNo">—</b></span></div>
+              <div class="telemetry-list"><div><span>GPS 定位 / 卫星</span><strong id="gpsSummary">—</strong></div><div><span>纬度 / 经度</span><strong id="gpsCoords">—</strong></div><div><span>姿态有效 / Roll / Pitch</span><strong id="imuSummary">—</strong></div><div><span>导航状态 / 距离 / 误差</span><strong id="navSummary">—</strong></div><div><span>运行时间</span><strong id="uptimeValue">—</strong></div><div><span>最后遥测</span><strong id="messageAge">等待</strong></div></div>
+              <button class="btn ghost full advanced-only" data-view-jump="diagnostics">查看完整遥测</button>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="view-regions">
+          <div class="section-toolbar"><div><p class="eyebrow">AREA MANAGEMENT</p><h2>养殖区域管理</h2><span>配置真实区域边界、养殖对象与独立阈值</span></div><div><button class="btn secondary" data-action="batch-risk">批量更新风险</button><button class="btn primary" data-action="create-region">新建区域</button></div></div>
+          <div class="region-layout"><div class="panel region-list-panel"><div class="search-box"><i data-lucide="search"></i><input id="regionSearch" placeholder="区域或养殖对象"></div><div class="region-list" id="regionList"><p class="empty-state">等待区域数据</p></div><div class="recover-row"><select id="deletedZoneSelect" aria-label="已删除区域"><option value="">无可恢复区域</option></select><button class="btn ghost" id="recoverZoneBtn" disabled>恢复</button></div></div>
+            <div class="panel region-editor">
+              <div class="panel-head"><div><p class="eyebrow">AREA PROFILE</p><h2 id="regionEditorTitle">区域配置</h2></div><div><button class="btn secondary" id="deleteRegionBtn" type="button" disabled><i data-lucide="trash-2"></i>删除</button><button class="btn primary" id="saveRegionBtn" type="submit" form="regionForm"><i data-lucide="save"></i><span>保存</span></button></div></div>
+              <form class="form-grid" id="regionForm">
+                <input type="hidden" id="regionIdInput">
+                <label>区域名称<input id="zoneNameInput" required></label>
+                <label>养殖对象模式<select id="speciesModeSelect"><option value="builtin">内置</option><option value="custom">自定义</option></select></label>
+                <label id="builtinSpeciesLabel">内置养殖对象<select id="builtinSpeciesSelect" required></select></label>
+                <label id="customSpeciesLabel">自定义名称<input id="customSpeciesInput"></label>
+                <div class="form-divider region-geometry-title"><span>区域位置与范围</span><small>可在地图拖动框选，也可以手动输入精确参数</small></div>
+                <div class="region-map-editor span-2">
+                  <div class="region-map-toolbar">
+                    <button class="btn primary" id="drawRegionBtn" type="button" aria-pressed="false"><i data-lucide="scan"></i><span>绘制区域</span></button>
+                    <button class="btn secondary" id="fitRegionBtn" type="button"><i data-lucide="maximize"></i>适应区域</button>
+                    <button class="btn secondary" id="locateRegionBoatBtn" type="button"><i data-lucide="locate-fixed"></i>定位船只</button>
+                    <button class="btn ghost" id="resetRegionBtn" type="button"><i data-lucide="rotate-ccw"></i>重置</button>
+                  </div>
+                  <p class="region-map-help" id="regionMapHelp" aria-live="polite">点击“绘制区域”，然后在地图上按住并拖动形成矩形；也可以直接修改下方参数。</p>
+                  <div class="region-map-shell"><div class="map-fallback" aria-hidden="true"></div><div id="regionMapCanvas" class="region-map" aria-label="区域位置与范围编辑地图"></div></div>
+                  <div class="region-map-status" id="regionMapStatus" aria-live="polite">尚未设置有效区域</div>
+                </div>
+                <label>中心纬度<input id="zoneLatInput" type="number" min="-90" max="90" step="0.0000001" required></label>
+                <label>中心经度<input id="zoneLonInput" type="number" min="-180" max="180" step="0.0000001" required></label>
+                <label>南北长度（m）<input id="zoneLengthInput" type="number" min="0.1" step="0.1" required></label>
+                <label>东西宽度（m）<input id="zoneWidthInput" type="number" min="0.1" step="0.1" required></label>
+                <div class="form-divider">水质适宜阈值</div>
+                <label>pH 最小值<input id="phMinInput" type="number" step="0.01" required></label>
+                <label>pH 最大值<input id="phMaxInput" type="number" step="0.01" required></label>
+                <label>水温最小值（°C）<input id="tempMinInput" type="number" step="0.1" required></label>
+                <label>水温最大值（°C）<input id="tempMaxInput" type="number" step="0.1" required></label>
+                <label class="span-2">浊度上限（NTU）<input id="turbidityMaxInput" type="number" min="0" step="0.1" required></label>
+              </form>
+            </div></div>
+        </section>
+
+        <section class="view" id="view-tasks">
+          <div class="section-toolbar"><div><p class="eyebrow">AUTONOMOUS INSPECTION</p><h2>自动巡检与采样任务</h2><span>任务状态来自服务端采样状态机</span></div><button class="btn primary" data-action="new-inspection">创建巡检任务</button></div>
+          <div class="task-grid"><article class="panel"><div class="panel-head"><div><p class="eyebrow">CURRENT TASK</p><h2 id="taskViewTitle">当前无任务</h2></div><span class="risk-badge unknown" id="taskViewBadge">待机</span></div><div class="task-hero"><div class="radar"><i data-lucide="ship"></i></div><div><span>目标区域</span><strong id="taskZoneName">—</strong><p id="taskDetailText">等待任务</p></div></div><div class="timeline" id="taskTimeline"></div><div class="mission-warning" id="taskWarning" hidden></div><div class="button-row"><button class="btn secondary" id="taskRetryBtn" hidden>重试目标</button><button class="btn danger-outline" id="taskCancelBtn" disabled>取消任务</button></div></article>
+            <article class="panel task-config"><div class="panel-head"><div><p class="eyebrow">MISSION PARAMETERS</p><h2>任务参数</h2></div></div><form class="form-grid" id="samplingConfigForm"><label>中心到达半径（m）<input id="arrivalRadiusInput" type="number" step="0.1"></label><label>保持/兜底半径（m）<input id="fallbackRadiusInput" type="number" step="0.1"></label><label>降级等待时间（秒）<input id="fallbackAfterInput" type="number" step="1"></label><label>到达超时（分钟）<input id="targetTimeoutInput" type="number" step="0.1"></label><label>稳定等待（秒）<input id="stabilizationInput" type="number" step="1"></label><label>采样间隔（秒）<input id="sampleIntervalInput" type="number" step="1"></label><label class="span-2">采样持续（分钟）<input id="sampleDurationInput" type="number" step="0.1"></label></form><button class="btn primary full" id="saveSamplingConfigBtn">保存任务参数</button></article></div>
+        </section>
+
+        <section class="view" id="view-samples">
+          <div class="section-toolbar"><div><p class="eyebrow">SAMPLE HISTORY</p><h2>采样记录</h2><span>正式、手动与测试样本均来自服务端持久化数据</span></div><div><button class="btn secondary advanced-only" id="manualSampleBtn">保存当前遥测</button><button class="btn primary advanced-only" id="openTestSampleBtn">写入测试样本</button></div></div>
+          <div class="panel table-panel"><div class="table-toolbar"><select id="sampleFilter"><option value="">全部区域</option></select><span id="selectedCount">已选择 0 条</span><button class="btn danger-outline" id="deleteSamplesBtn" disabled>删除勾选</button><button class="btn secondary" id="clearRegionSamplesBtn" disabled>清空当前区域</button></div><div class="table-scroll"><table class="data-table"><caption class="sr-only">采样记录</caption><thead><tr><th><input type="checkbox" id="selectAllSamples" aria-label="全选当前表格样本"></th><th>采样时间</th><th>区域</th><th>来源</th><th>pH / 校验</th><th>水温 / 校验</th><th>浊度</th><th>风险</th></tr></thead><tbody id="sampleTableBody"><tr><td colspan="8">等待采样数据</td></tr></tbody></table></div></div>
+        </section>
+
+        <section class="view" id="view-advice">
+          <div class="section-toolbar"><div><p class="eyebrow">AQUACULTURE COPILOT</p><h2 id="adviceTitle">养殖建议</h2><span>分析来源、模型和时间均以服务端返回为准</span></div><button class="btn primary" id="analyzeAdviceBtn">生成建议</button></div>
+          <div class="advice-grid"><article class="panel advice-report"><div class="ai-banner"><span><i data-lucide="brain-circuit"></i></span><div><strong id="analysisSource">尚未分析</strong><p id="analysisMeta">选择区域后可运行结构化风险分析</p></div><b id="analysisLevel">—</b></div><div class="advice-section"><div><strong id="analysisSummary">等待真实分析结果</strong><p id="analysisBody">不会显示固定模型、置信度或演示建议。</p></div></div><button class="btn secondary" id="riskAnalysisBtn">刷新结构化风险</button></article>
+            <article class="panel chat-panel"><div class="panel-head compact"><div><p class="eyebrow">FOLLOW-UP</p><h2>追问助手</h2></div><span class="online-label" id="chatProvider">规则/模型由后端决定</span></div><div class="quick-questions"><button>请分析当前水质</button><button>需要复测吗？</button><button>如何处理异常？</button></div><div class="chat-log" id="chatLog"><div class="message system"><p>选择区域后发送问题。回复内容及来源由服务端返回。</p></div></div><form class="chat-input" id="chatForm"><label class="sr-only" for="chatQuestion">问题</label><input id="chatQuestion" placeholder="输入关于当前区域的问题"><button class="btn primary">发送</button></form></article></div>
+        </section>
+
+        <section class="view" id="view-connection">
+          <div class="section-toolbar"><div><p class="eyebrow">DEVICE CONNECTION</p><h2>系统与设备连接</h2><span>WebSocket、串口与遥测新鲜度分别显示</span></div></div>
+          <div class="connection-grid"><article class="panel"><div class="connection-hero"><span><i data-lucide="radio-tower"></i></span><div><small>WebSocket 状态</small><strong id="connectionWs">等待连接</strong><p id="connectionWsDetail">—</p></div></div><div class="connection-details"><div><span>串口状态</span><b id="connectionSerial">未连接</b></div><div><span>遥测状态</span><b id="connectionTelemetry">等待</b></div><div><span>最后遥测</span><b id="connectionLastData">—</b></div></div></article>
+            <article class="panel"><div class="panel-head"><div><p class="eyebrow">SERIAL PORT</p><h2>串口设备</h2></div><button class="icon-btn" id="refreshPortsBtn" aria-label="刷新串口列表"><i data-lucide="refresh-cw"></i></button></div><div class="form-grid"><label>可用串口<select id="serialSelect"><option value="">等待扫描</option></select></label><label>波特率<select id="baudSelect"><option>115200</option><option>57600</option><option>38400</option><option>9600</option></select></label></div><div class="port-state"><span class="summary-icon cyan"><i data-lucide="usb"></i></span><div><span>当前连接</span><strong id="connectedPort">未连接</strong><small id="connectedLastMessage">最后消息：—</small></div><span class="risk-badge unknown" id="serialBadge">未连接</span></div><div class="button-row"><button class="btn primary" id="connectBtn">连接设备</button><button class="btn danger-outline" id="disconnectBtn" disabled>断开连接</button></div></article></div>
+        </section>
+
+        <section class="view" id="view-control">
+          <div class="section-toolbar"><div><p class="eyebrow">ADVANCED CONTROL</p><h2>无人船快捷控制与电机校准</h2><span>指令使用扁平 JSON，并由后端附加 CRLF</span></div><span class="risk-badge danger">高级模式</span></div>
+          <div class="control-grid"><article class="panel"><div class="panel-head"><div><p class="eyebrow">QUICK COMMANDS</p><h2>快捷控制</h2></div></div><div class="control-buttons"><button class="control-btn start" data-command="start"><i data-lucide="power"></i><span>启动</span></button><button class="control-btn stop" data-command="stop"><i data-lucide="octagon-x"></i><span>停止</span></button><button class="control-btn" data-command="sensor"><i data-lucide="scan-line"></i><span>请求传感器</span></button><button class="control-btn" data-command="status"><i data-lucide="radio-tower"></i><span>请求状态</span></button></div><label class="code-label">自定义扁平 JSON 指令<textarea id="customCommand" placeholder='{"t":"cmd","cmd":"status"}'></textarea></label><p class="form-help">仅允许一层对象及字符串、数字、布尔值或 null；发送时固定附加 CRLF。</p><button class="btn primary full" id="sendCommandBtn">发送指令</button></article>
+            <article class="panel"><div class="panel-head"><div><p class="eyebrow">MOTOR TEST</p><h2>电机测试与校准</h2></div><button class="btn danger-outline" id="stopMotorsBtn">一键停机</button></div><div class="motor-values"><label>左电机输出 <output id="leftMotorValue">0</output><input id="leftMotor" type="range" min="-100" max="100" value="0"></label><label>右电机输出 <output id="rightMotorValue">0</output><input id="rightMotor" type="range" min="-100" max="100" value="0"></label></div><div class="preset-grid"><button data-motor="forward"><i data-lucide="arrow-up"></i>前进</button><button data-motor="back"><i data-lucide="arrow-down"></i>后退</button><button data-motor="left"><i data-lucide="rotate-ccw"></i>左转</button><button data-motor="right"><i data-lucide="rotate-cw"></i>右转</button></div><button class="btn primary full" id="sendMotorBtn">发送电机指令</button><div class="form-grid calibration-grid"><label>左电机缩放<input id="calLeftScale" type="number" min="0" max="2" step="0.01"></label><label>右电机缩放<input id="calRightScale" type="number" min="0" max="2" step="0.01"></label><label>左输出偏移<input id="calLeftOffset" type="number" min="-200" max="200"></label><label>右输出偏移<input id="calRightOffset" type="number" min="-200" max="200"></label></div><button class="btn secondary full" id="sendCalibrationBtn">发送校准参数</button></article></div>
+        </section>
+
+        <section class="view" id="view-diagnostics">
+          <div class="section-toolbar"><div><p class="eyebrow">COMMUNICATION DIAGNOSTICS</p><h2>通信诊断</h2><span>原始遥测和日志使用纯文本安全渲染</span></div><button class="btn secondary" id="clearLogsBtn">清空浏览器日志视图</button></div>
+          <div class="diagnostic-grid"><article class="panel stats-panel"><div class="diag-stat"><span>GPS 接收字节 / NMEA 行</span><strong id="diagGps">—</strong><small>gb / gl</small></div><div class="diag-stat"><span>IMU 接收字节 / 帧数</span><strong id="diagImu">—</strong><small>ib / ia</small></div><div class="diag-stat"><span>数据序号 / uptime</span><strong id="diagSeq">—</strong><small>seq / ms</small></div><div class="diag-stat"><span>串口 partial bytes</span><strong id="diagPartial">—</strong><small>解析缓冲</small></div></article>
+            <article class="panel raw-compact-panel"><div class="panel-head compact"><div><p class="eyebrow">COMPACT FIELDS</p><h2>紧凑字段</h2></div></div><div class="compact-fields" id="compactFields"></div></article>
+            <article class="panel log-panel"><div class="panel-head compact"><div><p class="eyebrow">SERIAL LOG</p><h2>通信日志</h2></div></div><pre class="terminal" id="terminalLog">暂无日志</pre></article>
+            <article class="panel raw-panel"><div class="panel-head compact"><div><p class="eyebrow">RAW TELEMETRY</p><h2>完整原始遥测 JSON</h2></div><button class="icon-btn" id="copyJsonBtn" aria-label="复制 JSON"><i data-lucide="copy"></i></button></div><pre id="rawJson">暂无遥测</pre></article></div>
+        </section>
+
+        <section class="view" id="view-settings">
+          <div class="section-toolbar"><div><p class="eyebrow">ANALYSIS & TEST SETTINGS</p><h2>高级设置</h2><span>不在界面中声明固定模型或保存虚假凭证</span></div></div>
+          <div class="settings-grid"><article class="panel"><div class="panel-head"><div><p class="eyebrow">ANALYSIS SERVICE</p><h2>分析服务配置</h2></div></div><form class="provider-config" id="llmConfigForm"><label>来源<select id="llmProviderSelect"><option value="disabled">禁用</option><option value="cloud">云端 OpenAI-compatible</option><option value="ollama">Ollama</option><option value="anthropic">Anthropic 兼容</option></select></label><label>云端 API 端点<input id="llmCloudEndpoint"></label><label>云端 API Key<input id="llmCloudApiKey" type="password" autocomplete="new-password" placeholder="留空表示不修改"></label><label>云端模型<input id="llmCloudModel"></label><label>Ollama 端点<input id="llmOllamaEndpoint"></label><label>Ollama 模型<input id="llmOllamaModel"></label><button class="btn primary" id="saveLlmConfigBtn" type="submit">保存分析配置</button></form><div class="security-note">Anthropic 兼容模式的凭证由后端环境变量管理，浏览器不提供密钥输入。</div></article>
+            <article class="panel"><div class="panel-head"><div><p class="eyebrow">TEST SAMPLE</p><h2>高级测试样本</h2></div></div><form class="form-grid" id="testSampleForm"><label>pH<input id="testPhInput" type="number" step="0.01"></label><label>水温 °C<input id="testTempInput" type="number" step="0.1"></label><label class="span-2">浊度 NTU<input id="testTurbidityInput" type="number" step="0.1"></label><button class="btn secondary span-2" type="submit">写入选中区域测试样本</button></form><div class="sensor-raw"><div><span>pH raw / mV</span><strong id="settingPhRaw">—</strong></div><div><span>浊度 raw / mV / DOUT</span><strong id="settingTurbRaw">—</strong></div><div><span>温度有效</span><strong id="settingTempValid">—</strong></div><div><span>电机校准</span><strong id="settingMotorCal">—</strong></div></div></article></div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="modalBackdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" tabindex="-1">
+      <div class="modal-head"><div><p class="eyebrow" id="modalEyebrow">ACTION</p><h2 id="modalTitle">操作确认</h2></div><button class="icon-btn" id="modalCloseBtn" aria-label="关闭"><i data-lucide="x"></i></button></div>
+      <div id="modalContent"></div>
+      <div class="modal-actions"><button class="btn secondary" id="modalCancelBtn">取消</button><button class="btn primary" id="modalConfirmBtn">确认</button></div>
+    </div>
+  </div>
+  <div class="toast-stack" id="toastStack" aria-live="polite" aria-atomic="false"></div>
+
+  <script src="/vendor/leaflet/leaflet.js"></script>
+  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

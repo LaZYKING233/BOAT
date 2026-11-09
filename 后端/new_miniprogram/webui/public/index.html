@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>智航清泓 · 无人船水质监测</title>
+  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+  <header class="page-header">
+    <div class="header-left">
+      <div class="brand-mark">澄</div>
+      <div>
+        <h1>智航清泓</h1>
+        <span class="header-sub">STM32 水质巡检无人船 · AI 养殖建议</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <label class="toggle-switch">
+        <input type="checkbox" id="advancedModeCheckbox">
+        <span class="toggle-slider"></span>
+        <span class="toggle-label">高级模式</span>
+      </label>
+      <div class="badge-row">
+        <span id="serverBadge" class="badge badge-online"><span class="status-dot"></span>系统</span>
+        <span id="serialBadge" class="badge badge-offline"><span class="status-dot"></span>串口</span>
+      </div>
+      <button id="settingsButton" type="button" class="icon-btn" title="设置"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+    </div>
+  </header>
+
+  <div class="dashboard">
+    <!-- 左侧：船况 + 区域管理 -->
+    <aside class="telemetry-panel">
+      <div class="panel-title-block">
+        <span class="panel-eyebrow">Live boat</span>
+        <h2>实时船况</h2>
+      </div>
+
+      <div class="tele-section live-summary">
+        <div class="summary-tile"><span>pH</span><strong id="telePh">-</strong></div>
+        <div class="summary-tile"><span>水温</span><strong id="teleTemp">-</strong></div>
+        <div class="summary-tile"><span>浊度</span><strong id="teleTurb">-</strong></div>
+        <div class="summary-tile"><span>GPS</span><strong id="teleGpsFix">-</strong></div>
+      </div>
+
+      <div class="tele-section">
+        <div class="tele-section-title">连接</div>
+        <div class="tele-row"><span class="tele-label">状态</span><span id="teleConnStatus" class="tele-value">-</span></div>
+        <div class="tele-row"><span class="tele-label">端口</span><span id="teleConnPort" class="tele-value">-</span></div>
+        <div class="tele-row"><span class="tele-label">最后消息</span><span id="teleConnLastMsg" class="tele-value">-</span></div>
+        <div class="tele-row advanced-only"><span class="tele-label">波特率</span><span id="teleConnBaud" class="tele-value">-</span></div>
+      </div>
+
+      <div class="tele-section advanced-only">
+        <div class="tele-section-title">水质原始值</div>
+        <div class="tele-row tele-sub"><span class="tele-label">pH raw</span><span id="telePhRaw" class="tele-value">-</span></div>
+        <div class="tele-row tele-sub"><span class="tele-label">pH mV</span><span id="telePhMv" class="tele-value">-</span></div>
+        <div class="tele-row tele-sub"><span class="tele-label">浊度 raw</span><span id="teleTurbRaw" class="tele-value">-</span></div>
+        <div class="tele-row tele-sub"><span class="tele-label">浊度 mV</span><span id="teleTurbMv" class="tele-value">-</span></div>
+        <div class="tele-row tele-sub"><span class="tele-label">DOUT</span><span id="teleTurbDout" class="tele-value">-</span></div>
+        <div class="tele-row tele-sub"><span class="tele-label">状态</span><span id="teleTurbStatus" class="tele-value">-</span></div>
+        <div class="tele-row tele-sub"><span class="tele-label">水温有效</span><span id="teleTempValid" class="tele-value">-</span></div>
+      </div>
+
+      <div class="tele-section">
+        <div class="tele-section-title">定位与姿态</div>
+        <div class="tele-row"><span class="tele-label">卫星</span><span id="teleGpsSat" class="tele-value">-</span></div>
+        <div class="tele-row"><span class="tele-label">纬度</span><span id="teleGpsLat" class="tele-value">-</span></div>
+        <div class="tele-row"><span class="tele-label">经度</span><span id="teleGpsLon" class="tele-value">-</span></div>
+        <div class="tele-row"><span class="tele-label">Yaw</span><span id="teleImuYaw" class="tele-value tele-highlight">-</span></div>
+        <div class="tele-row advanced-only"><span class="tele-label">IMU 有效</span><span id="teleImuValid" class="tele-value">-</span></div>
+        <div class="tele-row advanced-only"><span class="tele-label">Roll</span><span id="teleImuRoll" class="tele-value">-</span></div>
+        <div class="tele-row advanced-only"><span class="tele-label">Pitch</span><span id="teleImuPitch" class="tele-value">-</span></div>
+        <div class="tele-row advanced-only"><span class="tele-label">raw lat</span><span id="teleGpsRawLat" class="tele-value">-</span></div>
+        <div class="tele-row advanced-only"><span class="tele-label">raw lon</span><span id="teleGpsRawLon" class="tele-value">-</span></div>
+        <div class="tele-row advanced-only"><span class="tele-label">GPS 字节</span><span id="teleGpsBytes" class="tele-value">-</span></div>
+        <div class="tele-row advanced-only"><span class="tele-label">NMEA行</span><span id="teleGpsLines" class="tele-value">-</span></div>
+        <div class="tele-row advanced-only"><span class="tele-label">IMU 字节</span><span id="teleImuBytes" class="tele-value">-</span></div>
+        <div class="tele-row advanced-only"><span class="tele-label">IMU 帧数</span><span id="teleImuFrames" class="tele-value">-</span></div>
+      </div>
+
+      <div class="tele-section">
+        <div class="tele-section-title">导航</div>
+        <div class="tele-row"><span class="tele-label">状态</span><span id="teleNavState" class="tele-value tele-highlight">-</span></div>
+        <div class="tele-row"><span class="tele-label">距离</span><span id="teleNavDist" class="tele-value">-</span></div>
+        <div class="tele-row"><span class="tele-label">航向误差</span><span id="teleNavHeading" class="tele-value">-</span></div>
+      </div>
+
+      <div class="tele-section advanced-only">
+        <div class="tele-section-title">遥测与电机校准</div>
+        <div class="tele-row"><span class="tele-label">seq</span><span id="teleSeq" class="tele-value">-</span></div>
+        <div class="tele-row"><span class="tele-label">uptime</span><span id="teleMs" class="tele-value">-</span></div>
+        <div class="tele-row"><span class="tele-label">版本</span><span id="teleBootVer" class="tele-value">-</span></div>
+        <div class="tele-row"><span class="tele-label">分压倍率</span><span id="teleBootDiv" class="tele-value">-</span></div>
+        <div class="tele-row"><span class="tele-label">左缩放</span><span id="teleMls" class="tele-value">-</span></div>
+        <div class="tele-row"><span class="tele-label">右缩放</span><span id="teleMrs" class="tele-value">-</span></div>
+        <div class="tele-row"><span class="tele-label">左偏移</span><span id="teleMlo" class="tele-value">-</span></div>
+        <div class="tele-row"><span class="tele-label">右偏移</span><span id="teleMro" class="tele-value">-</span></div>
+      </div>
+
+      <div class="tele-section tele-raw-section advanced-only">
+        <div class="tele-section-title" id="teleRawToggle">原始 JSON ▸</div>
+        <pre id="teleRawJson" class="tele-raw-json" style="display:none"></pre>
+      </div>
+
+      <div class="zone-list-panel">
+        <div class="section-header compact">
+          <div>
+            <span class="panel-eyebrow">Regions</span>
+            <h2>区域管理</h2>
+          </div>
+          <button id="addZoneBtn" type="button" class="tiny-btn primary">新增</button>
+        </div>
+        <div id="zoneCards" class="zone-grid"></div>
+      </div>
+    </aside>
+
+    <!-- 中间：主地图 -->
+    <main class="dashboard-main">
+      <div class="map-hero">
+        <div class="section-header map-title-row">
+          <div>
+            <span class="panel-eyebrow">Aquaculture map</span>
+            <h2>养殖水域地图</h2>
+          </div>
+          <div class="section-actions">
+            <button id="analyzeAllButton" type="button" class="small-btn">分析全部风险</button>
+            <button id="recenterMapButton" type="button" class="small-btn">定位船只</button>
+            <button id="clearTargetButton" type="button" class="small-btn">清除目标</button>
+            <button id="sendTargetButton" type="button" class="small-btn primary">发送地图点</button>
+          </div>
+        </div>
+        <div class="map-container">
+          <div class="map-header">
+            <h3>点击区域即可同步右侧诊断</h3>
+            <div class="map-actions">
+              <span class="map-chip">矩形养殖区</span>
+              <span class="map-chip signal">LoRa 实时遥测</span>
+            </div>
+          </div>
+          <div id="targetMap" class="main-map"></div>
+        </div>
+      </div>
+
+      <div class="advanced-workbench advanced-only">
+        <div class="side-card">
+          <div class="side-card-header"><h3>快捷指令</h3></div>
+          <div class="quick-cmd-row">
+            <button id="quickStopButton" type="button" class="danger-btn full-width">停船</button>
+            <button id="quickStartButton" type="button" class="full-width">启动</button>
+            <button id="quickSensorButton" type="button" class="full-width">传感器</button>
+          </div>
+        </div>
+
+        <div class="side-card">
+          <div class="side-card-header"><h3>电机测试</h3></div>
+          <div class="motor-test">
+            <div class="motor-row"><span class="motor-label">左电机</span><input id="motorLeftSlider" type="range" min="-100" max="100" value="0" class="motor-slider"><span id="motorLeftValue" class="motor-value">0</span></div>
+            <div class="motor-row"><span class="motor-label">右电机</span><input id="motorRightSlider" type="range" min="-100" max="100" value="0" class="motor-slider"><span id="motorRightValue" class="motor-value">0</span></div>
+            <div class="motor-actions"><button id="motorSendButton" type="button" class="primary full-width">发送电机指令</button><button id="motorStopButton" type="button" class="full-width">电机停止</button></div>
+            <div class="motor-presets"><button id="motorForward" type="button" class="tiny-btn">前进</button><button id="motorBackward" type="button" class="tiny-btn">后退</button><button id="motorTurnLeft" type="button" class="tiny-btn">左转</button><button id="motorTurnRight" type="button" class="tiny-btn">右转</button></div>
+            <div class="motor-cal-section">
+              <div class="motor-cal-title">电机校准</div>
+              <div class="motor-row"><span class="motor-label">左缩放</span><input id="calLeftScaleSlider" type="range" min="50" max="150" value="100" class="motor-slider"><span id="calLeftScaleValue" class="motor-value">1.00</span></div>
+              <div class="motor-row"><span class="motor-label">右缩放</span><input id="calRightScaleSlider" type="range" min="50" max="150" value="100" class="motor-slider"><span id="calRightScaleValue" class="motor-value">1.00</span></div>
+              <div class="motor-row"><span class="motor-label">左偏移</span><input id="calLeftOffsetInput" type="number" min="-200" max="200" value="0" class="motor-cal-input"></div>
+              <div class="motor-row"><span class="motor-label">右偏移</span><input id="calRightOffsetInput" type="number" min="-200" max="200" value="0" class="motor-cal-input"></div>
+              <button id="calSendButton" type="button" class="primary full-width">应用校准</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- 右侧：区域详情 + AI -->
+    <aside class="dashboard-side">
+      <!-- 导航监视器 -->
+      <div class="side-section-header"><h3>导航监视器</h3></div>
+      <div class="nav-monitor">
+        <div class="nav-big-stat"><span class="nav-big-label">状态</span><span id="navMonState" class="nav-big-value">待机</span></div>
+        <div class="nav-stats-grid">
+          <div class="nav-stat"><span class="nav-stat-label">到目标距离</span><span id="navMonDist" class="nav-stat-value">-</span></div>
+          <div class="nav-stat"><span class="nav-stat-label">航向误差</span><span id="navMonHeading" class="nav-stat-value">-</span></div>
+        </div>
+        <div id="navMonTarget" class="nav-target-info">无目标</div>
+      </div>
+
+      <!-- 区域详情 -->
+      <div id="zoneDetailCard" style="display:none">
+        <div class="side-section-header">
+          <h3 id="zoneDetailTitle">区域详情</h3>
+          <div class="side-card-actions">
+            <button id="editZoneBtn" type="button" class="tiny-btn">编辑区域</button>
+            <button id="deleteZoneBtn" type="button" class="tiny-btn danger-btn advanced-only">删除</button>
+          </div>
+        </div>
+        <div class="detail-stats">
+          <div class="detail-stat"><span class="detail-stat-label">pH</span><strong id="detailPh">-</strong></div>
+          <div class="detail-stat"><span class="detail-stat-label">水温</span><strong id="detailTemp">-</strong></div>
+          <div class="detail-stat"><span class="detail-stat-label">浊度</span><strong id="detailTurbidity">-</strong></div>
+          <div class="detail-stat"><span class="detail-stat-label">风险</span><strong id="detailRisk">-</strong></div>
+        </div>
+        <div id="detailSamplingStatus" class="detail-sampling"></div>
+        <div class="detail-row"><span class="detail-label">结构化风险</span><button id="analyzeZoneBtn" type="button" class="tiny-btn">刷新风险</button></div>
+        <div id="detailAnalysis" class="detail-analysis">尚未分析</div>
+        <div class="detail-actions">
+          <button id="sendZoneTargetBtn" type="button" class="primary full-width">开始巡检选中区域</button>
+          <button id="manualSampleBtn" type="button" class="full-width advanced-only">手动保存当前遥测</button>
+        </div>
+        <div class="detail-row advanced-only"><span class="detail-label">最近采样</span><button id="clearZoneSamplesBtn" type="button" class="tiny-btn danger-btn">清空</button></div>
+        <div id="detailSamples" class="detail-samples advanced-only">暂无记录</div>
+      </div>
+
+      <!-- AI 区域建议 -->
+      <div class="ai-chat-card" id="aiChatCard">
+        <div class="side-section-header">
+          <h3>AI 区域建议</h3>
+          <button id="aiAnalyzeButton" type="button" class="tiny-btn primary">生成建议</button>
+        </div>
+        <div id="aiChatMessages" class="ai-chat-messages">
+          <div class="ai-empty">选择地图区域后，AI 会结合养殖对象、水质阈值和小船采样数据给出建议。</div>
+        </div>
+        <div class="ai-chat-input-row">
+          <input id="aiChatInput" type="text" placeholder="询问投喂、换水或复测建议">
+          <button id="aiChatSendButton" type="button" class="primary">发送</button>
+        </div>
+      </div>
+
+      <!-- 空状态 -->
+      <div id="zoneEmptyCard">
+        <div class="empty-hint">点击地图区域或左侧区域卡片查看详情</div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- 设置抽屉 -->
+  <div id="settingsPanel" class="settings-overlay" style="display:none">
+    <div class="settings-backdrop"></div>
+    <div class="settings-drawer">
+      <div class="settings-header">
+        <h2>系统设置</h2>
+        <button id="settingsClose" type="button" class="icon-btn">✕</button>
+      </div>
+      <div class="settings-body">
+        <div class="settings-group">
+          <h3>串口连接</h3>
+          <div class="form-row"><label>端口</label><div class="inline-row"><select id="portSelect"></select><button id="refreshPortsButton" type="button" class="small-btn">刷新</button></div></div>
+          <div class="form-row"><label>波特率</label><input id="baudRateInput" type="number" value="115200"></div>
+          <div class="form-actions"><button id="connectButton" type="button" class="primary">连接</button><button id="disconnectButton" type="button">断开</button></div>
+        </div>
+        <div class="settings-group advanced-only">
+          <h3>指令发送</h3>
+          <div class="form-row"><textarea id="sendInput" rows="3" placeholder='{"t":"cmd","cmd":"stop"}'></textarea></div>
+          <div class="checkbox-row"><label class="checkbox-label"><input id="appendNewlineCheckbox" type="checkbox" checked> \r\n</label><label class="checkbox-label"><input id="broadcastCheckbox" type="checkbox"> FF FF</label></div>
+          <button id="sendButton" type="button" class="primary full-width">发送</button>
+        </div>
+        <div class="settings-group advanced-only">
+          <h3>采样参数</h3>
+          <div class="form-row"><label>中心到达半径 m</label><input id="arrivalRadiusInput" type="number" step="0.1"></div>
+          <div class="form-row"><label>兜底/保持半径 m</label><input id="fallbackRadiusInput" type="number" step="0.1"></div>
+          <div class="form-row"><label>5m 降级等待 s</label><input id="fallbackAfterInput" type="number" step="1"></div>
+          <div class="form-row"><label>到达超时 min</label><input id="targetTimeoutInput" type="number" step="0.1"></div>
+          <div class="form-row"><label>稳定等待 s</label><input id="stabilizationInput" type="number" step="1"></div>
+          <div class="form-row"><label>采样间隔 s</label><input id="sampleIntervalInput" type="number" step="1"></div>
+          <div class="form-row"><label>采样时长 min</label><input id="sampleDurationInput" type="number" step="1"></div>
+          <div class="form-actions"><button id="saveSamplingConfigButton" type="button" class="primary">保存参数</button><button id="cancelSamplingButton" type="button">取消任务</button></div>
+        </div>
+        <div class="settings-group advanced-only">
+          <h3>测试样本</h3>
+          <div class="form-row"><label>pH</label><input id="testPhInput" type="number" step="0.01" value="7.20"></div>
+          <div class="form-row"><label>水温 ℃</label><input id="testTempInput" type="number" step="0.1" value="24.0"></div>
+          <div class="form-row"><label>浊度 NTU</label><input id="testTurbidityInput" type="number" step="1" value="20"></div>
+          <button id="testSampleButton" type="button" class="full-width">写入测试样本</button>
+        </div>
+        <div class="settings-group advanced-only">
+          <h3>LLM 风险分析</h3>
+          <p class="settings-note">Anthropic 兼容模式只读取后端环境变量，不在浏览器输入密钥。</p>
+          <div class="form-row"><label>来源</label><select id="llmProviderSelect"><option value="disabled">禁用</option><option value="cloud">云端 API</option><option value="ollama">Ollama</option><option value="anthropic">Anthropic 兼容</option></select></div>
+          <div class="form-row"><label>API 端点（OpenAI-compatible）</label><input id="llmCloudEndpoint" type="text" placeholder="https://api.deepseek.com/v1/chat/completions"></div>
+          <div class="form-row"><label>API Key（OpenAI-compatible）</label><input id="llmCloudApiKey" type="password" placeholder="sk-..."></div>
+          <div class="form-row"><label>模型（OpenAI-compatible）</label><input id="llmCloudModel" type="text" placeholder="deepseek-chat"></div>
+          <div class="form-row"><label>Ollama 端点</label><input id="llmOllamaEndpoint" type="text" placeholder="http://localhost:11434/api/chat"></div>
+          <div class="form-row"><label>Ollama 模型</label><input id="llmOllamaModel" type="text" placeholder="qwen2.5:7b"></div>
+          <button id="saveLlmConfigButton" type="button" class="primary full-width">保存</button>
+        </div>
+        <div class="settings-group advanced-only">
+          <h3>区域管理</h3>
+          <div class="inline-row"><select id="deletedZoneSelect" class="flex-1"></select><button id="recoverZoneButton" type="button" class="small-btn">恢复已删除</button></div>
+        </div>
+        <div class="settings-group advanced-only">
+          <h3>采样历史</h3>
+          <div class="inline-row"><select id="sampleHistoryZoneFilter" class="flex-1"></select><button id="deleteSelectedSamplesButton" type="button" class="small-btn danger-btn">删除勾选</button></div>
+          <div class="table-scroll table-scroll-sm">
+            <table class="history-table"><thead><tr><th>选</th><th>时间</th><th>区域</th><th>来源</th><th>pH</th><th>水温</th></tr></thead><tbody id="sampleHistoryBody"></tbody></table>
+          </div>
+        </div>
+        <div class="settings-group advanced-only">
+          <h3>通信日志</h3>
+          <pre id="rawLog" class="raw-log"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 区域编辑弹窗 -->
+  <div id="zoneEditModal" class="modal-overlay" style="display:none">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2 id="zoneEditTitle">编辑区域</h2>
+        <button id="zoneEditClose" type="button" class="icon-btn">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row"><label>名称</label><input id="zoneNameInput" type="text"></div>
+        <div class="form-row"><label>养殖对象</label><div class="inline-row"><select id="speciesModeSelect"><option value="builtin">内置</option><option value="custom">自定义</option></select><select id="builtinSpeciesSelect"></select></div></div>
+        <div class="form-row" id="customSpeciesRow" style="display:none"><label>自定义名称</label><input id="customSpeciesInput" type="text"></div>
+        <div class="form-row"><label>pH 范围</label><div class="inline-row"><input id="phMinInput" type="number" step="0.01" placeholder="下限"><span class="form-sep">~</span><input id="phMaxInput" type="number" step="0.01" placeholder="上限"></div></div>
+        <div class="form-row"><label>水温范围 ℃</label><div class="inline-row"><input id="tempMinInput" type="number" step="0.1" placeholder="下限"><span class="form-sep">~</span><input id="tempMaxInput" type="number" step="0.1" placeholder="上限"></div></div>
+        <div class="form-row"><label>浊度上限 NTU</label><input id="turbidityMaxInput" type="number" step="1"></div>
+        <div class="form-row"><label>中心纬度</label><input id="zoneLatInput" type="number" step="0.0000001"></div>
+        <div class="form-row"><label>中心经度</label><input id="zoneLonInput" type="number" step="0.0000001"></div>
+        <div class="form-row"><label>南北长度 m</label><input id="zoneLengthInput" type="number" step="0.1" min="0"></div>
+        <div class="form-row"><label>东西宽度 m</label><input id="zoneWidthInput" type="number" step="0.1" min="0"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="zoneEditCancel" type="button">取消</button>
+        <button id="zoneEditSave" type="button" class="primary">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/vendor/leaflet/leaflet.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

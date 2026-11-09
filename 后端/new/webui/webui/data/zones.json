@@ -1,0 +1,182 @@
+{
+  "version": 1,
+  "samplingConfig": {
+    "arrivalRadiusM": 1,
+    "fallbackRadiusM": 5,
+    "fallbackAfterMs": 60000,
+    "targetTimeoutMs": 600000,
+    "stabilizationMs": 30000,
+    "sampleIntervalMs": 5000,
+    "sampleDurationMs": 3600000
+  },
+  "zones": [
+    {
+      "id": "zone_A",
+      "name": "A区 草鱼塘",
+      "speciesProfile": {
+        "type": "builtin",
+        "key": "grass_carp",
+        "label": "草鱼",
+        "thresholds": {
+          "phMin": 6.5,
+          "phMax": 8.5,
+          "tempMin": 18,
+          "tempMax": 30,
+          "turbidityMax": 30
+        }
+      },
+      "geometry": {
+        "type": "axis_aligned_rectangle",
+        "center": {
+          "latitude": 34.500836,
+          "longitude": 103.9972285
+        },
+        "lengthM": 129.3,
+        "widthM": 246.1
+      },
+      "deletedAt": null,
+      "createdAt": "2026-06-06T18:55:41.692Z",
+      "updatedAt": "2026-07-16T08:06:23.778Z"
+    },
+    {
+      "id": "zone_B",
+      "name": "B区 鲫鱼塘",
+      "speciesProfile": {
+        "type": "builtin",
+        "key": "crucian_carp",
+        "label": "鲫鱼",
+        "thresholds": {
+          "phMin": 6.5,
+          "phMax": 8.5,
+          "tempMin": 16,
+          "tempMax": 30,
+          "turbidityMax": 35
+        }
+      },
+      "geometry": {
+        "type": "axis_aligned_rectangle",
+        "center": {
+          "latitude": 34.4998243,
+          "longitude": 103.9972281
+        },
+        "lengthM": 79.1,
+        "widthM": 246.1
+      },
+      "deletedAt": null,
+      "createdAt": "2026-06-06T18:55:41.692Z",
+      "updatedAt": "2026-07-16T08:07:45.730Z"
+    },
+    {
+      "id": "zone_C",
+      "name": "C区 鲤鱼塘",
+      "speciesProfile": {
+        "type": "builtin",
+        "key": "carp",
+        "label": "鲤鱼",
+        "thresholds": {
+          "phMin": 6.5,
+          "phMax": 8.5,
+          "tempMin": 18,
+          "tempMax": 30,
+          "turbidityMax": 35
+        }
+      },
+      "geometry": {
+        "type": "axis_aligned_rectangle",
+        "center": {
+          "latitude": 34.5004715,
+          "longitude": 103.9991383
+        },
+        "lengthM": 47.2,
+        "widthM": 91.6
+      },
+      "deletedAt": null,
+      "createdAt": "2026-06-06T18:55:41.692Z",
+      "updatedAt": "2026-07-16T08:08:25.667Z"
+    },
+    {
+      "id": "zone_D",
+      "name": "D区 鲈鱼塘",
+      "speciesProfile": {
+        "type": "builtin",
+        "key": "bass",
+        "label": "鲈鱼",
+        "thresholds": {
+          "phMin": 7,
+          "phMax": 8.5,
+          "tempMin": 20,
+          "tempMax": 30,
+          "turbidityMax": 25
+        }
+      },
+      "geometry": {
+        "type": "axis_aligned_rectangle",
+        "center": {
+          "latitude": 34.5010722,
+          "longitude": 103.9991597
+        },
+        "lengthM": 79.6,
+        "widthM": 101.4
+      },
+      "deletedAt": null,
+      "createdAt": "2026-06-06T18:55:41.692Z",
+      "updatedAt": "2026-07-16T08:08:42.118Z"
+    },
+    {
+      "id": "zone_E",
+      "name": "E区 虾塘",
+      "speciesProfile": {
+        "type": "builtin",
+        "key": "shrimp",
+        "label": "虾",
+        "thresholds": {
+          "phMin": 7.5,
+          "phMax": 8.8,
+          "tempMin": 20,
+          "tempMax": 32,
+          "turbidityMax": 30
+        }
+      },
+      "geometry": {
+        "type": "axis_aligned_rectangle",
+        "center": {
+          "latitude": 34.4998714,
+          "longitude": 104.0009412
+        },
+        "lengthM": 89.5,
+        "widthM": 208.7
+      },
+      "deletedAt": null,
+      "createdAt": "2026-06-06T18:55:41.692Z",
+      "updatedAt": "2026-07-16T08:08:46.795Z"
+    },
+    {
+      "id": "zone_20260608134349811_29c8bd21",
+      "name": "1",
+      "speciesProfile": {
+        "type": "builtin",
+        "key": "grass_carp",
+        "label": "草鱼",
+        "thresholds": {
+          "phMin": 6.5,
+          "phMax": 8.5,
+          "tempMin": 18,
+          "tempMax": 30,
+          "turbidityMax": 30
+        }
+      },
+      "geometry": {
+        "type": "axis_aligned_rectangle",
+        "center": {
+          "latitude": 0,
+          "longitude": 0
+        },
+        "lengthM": 1,
+        "widthM": 1
+      },
+      "deletedAt": "2026-07-16T08:08:48.917Z",
+      "createdAt": "2026-06-08T13:43:49.811Z",
+      "updatedAt": "2026-07-16T08:08:48.917Z"
+    }
+  ]
+}

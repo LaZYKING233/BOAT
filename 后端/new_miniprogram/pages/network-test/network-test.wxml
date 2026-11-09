@@ -1,0 +1,32 @@
+<!--network-test.wxml-->
+<view class="container">
+  <view class="row">
+    <text class="label">IP:</text>
+    <input class="input" value="{{ip}}" bindinput="onIpInput" placeholder="服务器IP" />
+  </view>
+  <view class="row">
+    <text class="label">端口:</text>
+    <input class="input" type="number" value="{{port}}" bindinput="onPortInput" placeholder="端口" />
+  </view>
+
+  <view class="btn-row">
+    <button type="primary" bindtap="connect" disabled="{{connected}}">连接</button>
+    <button type="warn" bindtap="disconnect" disabled="{{!connected}}">断开</button>
+  </view>
+
+  <view class="status">状态: {{connected ? '已连接' : '未连接'}}</view>
+
+  <view class="row">
+    <text class="label">发送:</text>
+    <input class="input" value="{{messageInput}}" bindinput="onMessageInput" placeholder="要发送的消息" />
+  </view>
+  <button bindtap="sendMessage" disabled="{{!connected}}">发送消息</button>
+
+  <view class="log-header">
+    <text>消息日志</text>
+    <text class="clear" bindtap="clearLog">清空</text>
+  </view>
+  <scroll-view class="log" scroll-y>
+    <text selectable>{{log}}</text>
+  </scroll-view>
+</view>
