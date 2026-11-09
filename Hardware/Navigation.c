@@ -282,6 +282,30 @@ void Navigation_Start(void)
     }
 }
 
+void Navigation_SetPid(float hkp, float hki, float hkd,
+                       float xkp, float xki, float xkd)
+{
+    /* 只更新提供的项（<=0 = 未提供），并钳位防止上位机写坏参数 */
+    if (hkp > 0.0f && hkp <= 50.0f)  heading_pid.kp = hkp;
+    if (hki >= 0.0f && hki <= 20.0f) heading_pid.ki = hki;
+    if (hkd >= 0.0f && hkd <= 50.0f) heading_pid.kd = hkd;
+
+    if (xkp > 0.0f && xkp <= 50.0f)  crosstrack_pid.kp = xkp;
+    if (xki >= 0.0f && xki <= 20.0f) crosstrack_pid.ki = xki;
+    if (xkd >= 0.0f && xkd <= 50.0f) crosstrack_pid.kd = xkd;
+
+    /* 换参数后旧的积分/微分状态不再适用 */
+    heading_pid.integral = 0;
+    heading_pid.prev_error = 0;
+    heading_pid.prev_derivative = 0;
+    heading_pid.primed = 0;
+
+    crosstrack_pid.integral = 0;
+    crosstrack_pid.prev_error = 0;
+    crosstrack_pid.prev_derivative = 0;
+    crosstrack_pid.primed = 0;
+}
+
 void Navigation_Stop(void)
 {
     nav.state = NAV_IDLE;

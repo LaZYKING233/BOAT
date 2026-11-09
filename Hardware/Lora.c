@@ -6,7 +6,9 @@
 
 extern UART_HandleTypeDef huart3;
 
-static char lora_tx_buffer[512];
+/* 遥测字段持续增加（新增 6 个 PID 增益），512 字节已接近上限，
+ * 留出余量避免 JSON 被 vsnprintf 截断导致整行解析失败。 */
+static char lora_tx_buffer[768];
 
 /* --- LoRa 下行接收 --- */
 #define LORA_LINE_MAX    256
@@ -22,6 +24,8 @@ static Lora_MotorCmd_t   lora_pending_motor_cmd = {0};
 static uint8_t           lora_motor_cmd_ready = 0;
 static Lora_MotorCalCmd_t lora_pending_motorcal_cmd = {0};
 static uint8_t           lora_motorcal_cmd_ready = 0;
+static Lora_PidCmd_t     lora_pending_pid_cmd = {0};
+static uint8_t           lora_pid_cmd_ready = 0;
 static uint16_t          lora_rx_count = 0;
 
 void Lora_Init(void)
@@ -197,6 +201,24 @@ static void Lora_ProcessLine(const char *line)
         lora_pending_motorcal_cmd = cmd;
         lora_motorcal_cmd_ready = 1;
     }
+    else if (strcmp(type, "pid") == 0)
+    {
+        Lora_PidCmd_t cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        cmd.valid = 1;
+
+        /* 缺省用 -1 表示"本次未提供"，由 Navigation_SetPid 跳过，
+         * 这样上位机可以只下发想改的那一项。 */
+        cmd.hkp = Lora_ExtractFloat(line, "hkp", -1.0f);
+        cmd.hki = Lora_ExtractFloat(line, "hki", -1.0f);
+        cmd.hkd = Lora_ExtractFloat(line, "hkd", -1.0f);
+        cmd.xkp = Lora_ExtractFloat(line, "xkp", -1.0f);
+        cmd.xki = Lora_ExtractFloat(line, "xki", -1.0f);
+        cmd.xkd = Lora_ExtractFloat(line, "xkd", -1.0f);
+
+        lora_pending_pid_cmd = cmd;
+        lora_pid_cmd_ready = 1;
+    }
 }
 
 void Lora_ProcessByte(uint8_t byte)
@@ -273,5 +295,18 @@ uint8_t Lora_GetPendingMotorCalCmd(Lora_MotorCalCmd_t *cmd)
     if (!lora_motorcal_cmd_ready) return 0;
     *cmd = lora_pending_motorcal_cmd;
     lora_motorcal_cmd_ready = 0;
+    return 1;
+}
+
+uint8_t Lora_HasPendingPidCmd(void)
+{
+    return lora_pid_cmd_ready;
+}
+
+uint8_t Lora_GetPendingPidCmd(Lora_PidCmd_t *cmd)
+{
+    if (!lora_pid_cmd_ready) return 0;
+    *cmd = lora_pending_pid_cmd;
+    lora_pid_cmd_ready = 0;
     return 1;
 }

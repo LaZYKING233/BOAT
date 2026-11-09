@@ -251,6 +251,20 @@ class BoatClient extends EventEmitter {
     return this.send({ t: 'mcal', ls, rs, lo, ro });
   }
 
+  /**
+   * 运行时下发 PID 增益（免重新编译烧录）。
+   * 只传想改的项，其余保持固件当前值。
+   * @param {object} g { hkp,hki,hkd, xkp,xki,xkd }
+   */
+  async setPid(g = {}) {
+    const msg = { t: 'pid' };
+    for (const k of ['hkp', 'hki', 'hkd', 'xkp', 'xki', 'xkd']) {
+      if (g[k] !== undefined && Number.isFinite(Number(g[k]))) msg[k] = Number(g[k]);
+    }
+    if (Object.keys(msg).length === 1) throw new Error('setPid 没有提供任何增益');
+    return this.send(msg);
+  }
+
   async stop() { return this.cmd('stop'); }
 
   async targetZone(zoneId) {
@@ -298,6 +312,15 @@ class BoatClient extends EventEmitter {
       waiter.resolve = (t) => { clearTimeout(timer); resolve(t); };
       this._waiters.add(waiter);
     });
+  }
+
+  /**
+   * 等待"某个时刻之后新收到"的帧。
+   * 用于验证下行命令是否生效——直接用 waitFor 会命中缓存的旧帧。
+   */
+  waitFresh(timeoutMs = 5000) {
+    const since = Date.now();
+    return this.waitFor((t) => t.rxAt > since, timeoutMs);
   }
 
   /** 这段时间内收到的新帧（不含已有的） */

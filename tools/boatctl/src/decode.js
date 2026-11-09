@@ -75,6 +75,10 @@ function decodeTelemetry(raw, rxAt) {
     leftPwm: num(raw.lw),
     rightPwm: num(raw.rw),
 
+    // ---- 当前生效的 PID 增益（固件回传，保证数据自带参数）----
+    headingGains: { kp: div(raw.hk, 1000), ki: div(raw.hi, 1000), kd: div(raw.hd, 1000) },
+    crosstrackGains: { kp: div(raw.xk, 1000), ki: div(raw.xi, 1000), kd: div(raw.xd, 1000) },
+
     // ---- 边缘 AI ----
     aiPhSimilarity: num(raw.aiph),
     aiPhNormal: flag(raw.aiphn),

@@ -53,6 +53,8 @@ Windows 下建议先 `cd tools/boatctl`，后面的命令可以简写成 `node b
 | `goto <lat> <lon> [--arrive 2] [--hold 6]` | **纯导航到点**，不启动采样任务 |
 | `navrun --to lat,lon --gains ...` | **设定目标 → 实跑 → 落盘 → 出调参报告** |
 | `pidreport x.jsonl [--json]` | 复盘某次实跑，给出参数调整方向 |
+| `report x.jsonl` | 生成 `.json` 数据记录 + `.html` 可视化报告 |
+| `setpid --hkp 2.0 --hki .35` | **运行时下发增益**，不用重新编译烧录 |
 | `sim [--port 3311] [--loop-ms 1000] [--gps] [--no-temp] [--no-imu] [--no-ph]` | 模拟桥（无硬件自测） |
 
 全局：`--url http://127.0.0.1:3000`、`--json`。
@@ -93,6 +95,31 @@ node bin/boatctl.js send --file cmd.json
 GPS 被刻意降级为 warning —— 室内调试不该被它挡住。
 
 ---
+
+## 双层 PID 与图怎么读
+
+控制是级联的：
+
+```
+偏差(位置/横偏, 米)
+      │
+      ▼  外环 crosstrack_pid
+  目标航向(度)  ──────────► 这就是图里那条蓝色虚线
+      │
+      ▼  内环 heading_pid
+  转向量 turn_output  ─────► 图里那条紫色线
+      │
+      ▼
+  左右电机 PWM
+```
+
+**内环**（`heading_pid`）负责"船头对准目标航向"，输入是陀螺仪实测 yaw 与目标航向之差。
+**外环**（`crosstrack_pid`）负责"别偏离航线"，输入是横向偏差，输出是目标航向的修正角。
+
+所以报告第一张图画的是**目标航向 vs 实际航向**（`ch` vs `iy`，都来自固件实时计算），
+这两条线贴合得越好，说明内环跟得越紧；两条线整体平行地偏离，说明外环在持续拉。
+
+> 航向做了 ±180° 展开处理，否则船过正北时曲线会从 +179 跳到 -179，看着像故障。
 
 ## PID 整定流程
 
@@ -148,6 +175,26 @@ runs/实验1-kp2.0-<时间>.meta.json   增益、目标、停止原因、备注
 
 报告会按这个优先级给结论：**先振荡、再饱和、最后才谈跟踪精度**。
 振荡没解决之前调 `ki` 是没有意义的。
+
+### 报告产物
+
+`navrun` 和 `report` 都会生成两份文件：
+
+```
+<run>.json   结构化记录：元信息 + 增益 + 逐帧序列 + 指标 + 诊断
+<run>.html   单文件可视化报告（离线可开，可直接打印成 PDF）
+```
+
+HTML 报告含四张图：航向（目标 vs 实际）、内环误差（带 ±10° 目标带）、
+控制输出（转向量 + 左右 PWM）、到目标距离，外加结论卡片与诊断。
+
+```bash
+node bin/boatctl.js report runs/实验1.jsonl          # 从已有数据补生成
+node bin/boatctl.js report runs/实验1.jsonl --json   # 只输出 JSON（给脚本/论文用）
+```
+
+JSON 里的 `series` 是逐帧数据，字段：`t / targetYaw / yaw / err / turn /
+leftPwm / rightPwm / distM / crossTrackM / navState`，可以直接拿去做统计图。
 
 ### 离线复盘
 

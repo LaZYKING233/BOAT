@@ -6,6 +6,7 @@ const path = require('path');
 const { BoatClient } = require('../src/client');
 const { analyze, renderReport } = require('../src/analyzer');
 const { analyzeRun, renderReport: renderPidReport } = require('../src/pid');
+const { buildReport, writeReportFiles } = require('../src/report');
 const { createSimulator } = require('../src/sim');
 
 // ------------------------------------------------------------------ 工具
@@ -252,6 +253,65 @@ async function cmdRecord(client, flags) {
   return 0;
 }
 
+async function cmdSetpid(client, flags) {
+  const map = { hkp: 'hkp', hki: 'hki', hkd: 'hkd', xkp: 'xkp', xki: 'xki', xkd: 'xkd' };
+  const payload = {};
+  for (const [flag, key] of Object.entries(map)) {
+    if (flags[flag] !== undefined) payload[key] = Number(flags[flag]);
+  }
+  if (!Object.keys(payload).length) {
+    console.error('用法: setpid --hkp 2.0 --hki 0.35 --hkd 0.25 [--xkp 2.3 --xki 0.30 --xkd 0.12]');
+    return 2;
+  }
+  await client.connect();
+  await ensureSerial(client, flags);
+  if (!client.isConnected()) { console.error('串口未连接（可加 --open COMx）'); return 1; }
+  const sentAt = Date.now();
+  await client.setPid(payload);
+  console.log('已下发 PID: ' + JSON.stringify(payload));
+
+  /* 必须等"发送之后才收到"的帧：client.latest 里还是上一帧，
+   * 直接匹配会立刻命中旧值，回显就成了假象。 */
+  const t = await client.waitFor((s) => s.rxAt > sentAt, 5000);
+  if (t) {
+    console.log('固件回显: 航向 kp=' + t.headingGains.kp + ' ki=' + t.headingGains.ki + ' kd=' + t.headingGains.kd
+      + ' | 横向 kp=' + t.crosstrackGains.kp + ' ki=' + t.crosstrackGains.ki + ' kd=' + t.crosstrackGains.kd);
+  } else {
+    console.log('（未收到回显，检查 LoRa 下行）');
+  }
+  return 0;
+}
+
+/** 生成 JSON + HTML 报告（离线，不需要连船） */
+function cmdReport(positional, flags) {
+  const file = positional[0];
+  if (!file) { console.error('用法: report <run.jsonl>'); return 2; }
+  const resolved = path.resolve(file);
+  const lines = fs.readFileSync(resolved, 'utf8').split(/\r?\n/).filter(Boolean);
+  const samples = lines.map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+
+  let meta = { runId: path.basename(resolved, '.jsonl') };
+  const metaPath = resolved.replace(/\.jsonl$/, '.meta.json');
+  if (fs.existsSync(metaPath)) {
+    try { meta = Object.assign(meta, JSON.parse(fs.readFileSync(metaPath, 'utf8'))); } catch { /* ignore */ }
+  }
+
+  const analysis = analyzeRun(samples, {
+    turnLimit: Number(flags['turn-limit']) || undefined,
+    gains: meta.gains || parseGains(flags.gains),
+    xgains: meta.xgains || parseGains(flags.xgains)
+  });
+  const rep = buildReport(samples, meta, analysis);
+  const base = resolved.replace(/\.jsonl$/, '');
+  const written = writeReportFiles(base, rep);
+
+  if (flags.json) { console.log(JSON.stringify(rep, null, 2)); return analysis.summary.fail > 0 ? 1 : 0; }
+  console.log('  JSON: ' + written.json);
+  console.log('  HTML: ' + written.html + '   (双击用浏览器打开)');
+  console.log(renderPidReport(analysis, { samples, plot: false }));
+  return analysis.summary.fail > 0 ? 1 : 0;
+}
+
 /** "2.0,0.35,0.25" -> { kp, ki, kd } */
 function parseGains(text) {
   if (!text || text === true) return null;
@@ -375,14 +435,20 @@ async function cmdNavrun(client, flags) {
   fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2), 'utf8');
   console.log('  数据: ' + jsonlPath);
 
-  const report = analyzeRun(samples, {
+  const analysis = analyzeRun(samples, {
     turnLimit: Number(flags['turn-limit']) || undefined,
     gains: meta.gains,
     xgains: meta.xgains
   });
-  console.log(renderPidReport(report, { samples, plot: flags['no-plot'] ? false : true }));
 
-  return report.summary.fail > 0 ? 1 : 0;
+  const rep = buildReport(samples, meta, analysis);
+  const written = writeReportFiles(path.join(outDir, runId), rep);
+
+  console.log(renderPidReport(analysis, { samples, plot: flags['no-plot'] ? false : true }));
+  console.log('  JSON 记录: ' + written.json);
+  console.log('  可视化报告: ' + written.html + '   (双击用浏览器打开)');
+
+  return analysis.summary.fail > 0 ? 1 : 0;
 }
 
 function cmdPidreport(positional, flags) {
@@ -471,6 +537,10 @@ function printHelp() {
              [--xgains 2.3,0.30,0.12] 记录横向修正增益
              [--timeout 180s] [--outdir runs] [--label 试验1] [--note "..."]
     pidreport <run.jsonl>         复盘一次实跑，给出参数调整方向
+    report <run.jsonl>            生成 JSON + 单文件 HTML 可视化报告
+    setpid --hkp 2.0 --hki .35 --hkd .25
+             [--xkp 2.3 --xki .30 --xkd .12]
+                                  运行时下发增益（不用重新编译烧录）
     sim [--port 3311] [--loop-ms 1000] [--gps] [--no-temp] [--no-imu] [--no-ph]
                                   启动模拟桥（无硬件时自测用）
         [--kp 1.5]                模拟的航向增益，调大即可复现振荡
@@ -494,6 +564,7 @@ async function main() {
   if (command === 'sim') return cmdSim(positional, flags);
   if (command === 'analyze') return cmdAnalyze(positional, flags);
   if (command === 'pidreport') return cmdPidreport(positional, flags);
+  if (command === 'report') return cmdReport(positional, flags);
 
   const client = new BoatClient({ url });
   try {
@@ -508,6 +579,7 @@ async function main() {
       case 'record': return await cmdRecord(client, flags);
       case 'goto': return await cmdGoto(client, positional, flags);
       case 'navrun': return await cmdNavrun(client, flags);
+      case 'setpid': return await cmdSetpid(client, flags);
       default:
         console.error('未知命令: ' + command);
         printHelp();

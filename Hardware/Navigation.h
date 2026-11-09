@@ -105,6 +105,16 @@ void Navigation_SetMissionTarget(float lat, float lon,
                                  float boundary_length_m, float boundary_width_m, float boundary_margin_m);
 void Navigation_Start(void);
 void Navigation_Stop(void);
+
+/**
+ * @brief  运行时设置双层 PID 增益（上位机下发，免重新编译烧录）
+ * @param  hkp/hki/hkd  内环：航向误差 -> 转向输出
+ * @param  xkp/xki/xkd  外环：横向偏差 -> 目标航向修正角
+ * @note   参数 <= 0 视为"本次不修改"；修改后会清除积分与微分状态，
+ *         避免换参数后的第一拍带着旧状态产生冲击。
+ */
+void Navigation_SetPid(float hkp, float hki, float hkd,
+                       float xkp, float xki, float xkd);
 void Navigation_Update(void);
 float Navigation_CalcDistance(float lat1, float lon1, float lat2, float lon2);
 float Navigation_CalcBearing(float lat1, float lon1, float lat2, float lon2);

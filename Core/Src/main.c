@@ -170,6 +170,7 @@ static void Telemetry_SendData(void)
               "\"gb\":%lu,\"gl\":%lu,"
               "\"ns\":%u,\"nd\":%ld,\"nt\":%ld,\"bs\":%u,\"bd\":%ld,\"rs\":%u,\"rd\":%ld,\"xt\":%ld,\"ch\":%ld,"
               "\"to\":%d,\"lw\":%d,\"rw\":%d,"
+              "\"hk\":%ld,\"hi\":%ld,\"hd\":%ld,\"xk\":%ld,\"xi\":%ld,\"xd\":%ld,"
               "\"aiph\":%u,\"aiphn\":%u,\"ait\":%u,\"aitn\":%u,"
               "\"mls\":%ld,\"mrs\":%ld,\"mlo\":%ld,\"mro\":%ld}\r\n",
               (unsigned long)seq++,
@@ -203,6 +204,12 @@ static void Telemetry_SendData(void)
               (int)nav.turn_output,
               (int)Motor_GetLastPwm(MOTOR_SPEED_LEFT),
               (int)Motor_GetLastPwm(MOTOR_SPEED_RIGHT),
+              (long)(heading_pid.kp * 1000.0f),
+              (long)(heading_pid.ki * 1000.0f),
+              (long)(heading_pid.kd * 1000.0f),
+              (long)(crosstrack_pid.kp * 1000.0f),
+              (long)(crosstrack_pid.ki * 1000.0f),
+              (long)(crosstrack_pid.kd * 1000.0f),
               ai_status.ph_similarity,
               ai_status.ph_normal,
               ai_status.temperature_similarity,
@@ -361,6 +368,19 @@ int main(void)
         Motor_Go_PWM(MOTOR_SPEED_RIGHT, (int16_t)cmd.r);
         Lora_Printf("{\"t\":\"ack\",\"kind\":\"motor\",\"l\":%ld,\"r\":%ld}\r\n",
                      (long)cmd.l, (long)cmd.r);
+      }
+    }
+
+    /* check LoRa downlink pid command (运行时整定，免重新烧录) */
+    {
+      Lora_PidCmd_t cmd;
+      if (Lora_GetPendingPidCmd(&cmd))
+      {
+        Navigation_SetPid(cmd.hkp, cmd.hki, cmd.hkd, cmd.xkp, cmd.xki, cmd.xkd);
+        Lora_Printf("{\"t\":\"ack\",\"kind\":\"pid\",\"hk\":%.3f,\"hi\":%.3f,\"hd\":%.3f,"
+                    "\"xk\":%.3f,\"xi\":%.3f,\"xd\":%.3f}\r\n",
+                    (double)heading_pid.kp, (double)heading_pid.ki, (double)heading_pid.kd,
+                    (double)crosstrack_pid.kp, (double)crosstrack_pid.ki, (double)crosstrack_pid.kd);
       }
     }
 

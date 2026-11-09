@@ -61,6 +61,7 @@ function createSimulator(options = {}) {
     navState: 0,
     motor: { l: 0, r: 0 },
     cal: { ls: 100, rs: 100, lo: 0, ro: 0 },
+    gains: { hk: 2000, hi: 350, hd: 250, xk: 2300, xi: 300, xd: 120 },
     aiPhSimilarity: 92,
     aiTempSimilarity: 88
   };
@@ -190,6 +191,12 @@ function createSimulator(options = {}) {
       aiphn: opt.aiOk ? 1 : 0,
       ait: opt.aiOk ? state.aiTempSimilarity : 0,
       aitn: opt.aiOk ? 1 : 0,
+      hk: state.gains.hk,
+      hi: state.gains.hi,
+      hd: state.gains.hd,
+      xk: state.gains.xk,
+      xi: state.gains.xi,
+      xd: state.gains.xd,
       mls: state.cal.ls,
       mrs: state.cal.rs,
       mlo: state.cal.lo,
@@ -238,6 +245,12 @@ function createSimulator(options = {}) {
     }
     if (msg.t === 'motor') state.motor = { l: msg.l, r: msg.r };
     if (msg.t === 'mcal') state.cal = { ls: Math.round(msg.ls * 100), rs: Math.round(msg.rs * 100), lo: msg.lo, ro: msg.ro };
+    if (msg.t === 'pid') {
+      const map = { hkp: 'hk', hki: 'hi', hkd: 'hd', xkp: 'xk', xki: 'xi', xkd: 'xd' };
+      for (const [k, field] of Object.entries(map)) {
+        if (msg[k] !== undefined) state.gains[field] = Math.round(Number(msg[k]) * 1000);
+      }
+    }
     if (msg.t === 'target') {
       state.target = { lat: msg.lat / 1e7, lon: msg.lon / 1e7 };
       state.navState = 1;

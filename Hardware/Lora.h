@@ -138,6 +138,19 @@ typedef struct {
 } Lora_MotorCalCmd_t;
 
 /**
+ * @brief 运行时下发 PID 增益（双层：内环航向 + 外环横向）
+ * @note  下位机格式：
+ *        {"t":"pid","hkp":2.0,"hki":0.35,"hkd":0.25,
+ *                   "xkp":2.3,"xki":0.30,"xkd":0.12}
+ *        省去的字段保持原值不变，方便只改一项。
+ */
+typedef struct {
+    uint8_t  valid;
+    float    hkp, hki, hkd;  /* 内环：航向误差 -> 转向输出 */
+    float    xkp, xki, xkd;  /* 外环：横向偏差 -> 目标航向修正 */
+} Lora_PidCmd_t;
+
+/**
  * @brief  启动 LoRa USART3 中断接收（单字节）
  * @note   在 Lora_Init() 之后、主循环之前调用一次
  */
@@ -194,6 +207,12 @@ uint8_t Lora_GetPendingMotorCmd(Lora_MotorCmd_t *cmd);
  * @retval 1 = 有，0 = 无
  */
 uint8_t Lora_HasPendingMotorCalCmd(void);
+
+/** 检查是否有待处理的 pid 命令 */
+uint8_t Lora_HasPendingPidCmd(void);
+
+/** 取出待处理的 pid 命令并清除标志 */
+uint8_t Lora_GetPendingPidCmd(Lora_PidCmd_t *cmd);
 
 /**
  * @brief  取出待处理的 mcal 命令并清除标志

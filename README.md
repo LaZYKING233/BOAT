@@ -129,7 +129,9 @@ node tools/boatctl/bin/boatctl.js selftest --open COM7 --out report.json
 | `bs` / `bd` | 边界状态 / 距边界距离（负数=越界） | - / m×100 |
 | `rs` / `rd` | 归位状态 / 距归位点距离 | - / m×100 |
 | `xt` / `ch` | 横向偏差 / 横向修正后目标航向 | m×100 / 度×100 |
-| `to` / `lw` / `rw` | 转向输出(PID) / 左右电机实际 PWM | -999~999 |
+| `to` / `lw` / `rw` | 转向输出(内环 PID) / 左右电机实际 PWM | -999~999 |
+| `hk`/`hi`/`hd` | 当前生效的内环增益（航向 kp/ki/kd） | ×1000 |
+| `xk`/`xi`/`xd` | 当前生效的外环增益（横向 kp/ki/kd） | ×1000 |
 | `aiph`/`aiphn`/`ait`/`aitn` | 边缘 AI：pH 相似度/是否正常、温度相似度/是否正常 | 0-100 / 0-1 |
 | `mls`/`mrs`/`mlo`/`mro` | 电机校准：左右缩放(×100)、左右偏移 | - |
 
@@ -144,7 +146,11 @@ node tools/boatctl/bin/boatctl.js selftest --open COM7 --out report.json
 {"t":"cmd","cmd":"stop"}      // stop / start / sensor / dtest
 {"t":"motor","l":50,"r":50}   // -100 ~ 100
 {"t":"mcal","ls":1.0,"rs":0.85,"lo":0,"ro":10}
+{"t":"pid","hkp":2.0,"hki":0.35,"hkd":0.25,"xkp":2.3,"xki":0.30,"xkd":0.12}
 ```
+
+`pid` 用于**运行时整定**，无需重新编译烧录；省略的字段保持原值。
+修改后积分/微分状态会清零，避免换参数瞬间的冲击。
 
 `ar` 到达半径、`r` 保持半径、`rr` 漂移归位半径、`bm` 边界容差（米）。
 `bclat/bclon/blen/bwid` 为区域矩形，用于越界判定与归位。
