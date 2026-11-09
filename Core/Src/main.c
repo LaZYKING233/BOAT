@@ -31,7 +31,6 @@
 #include "Lora.h"
 #include "DS18B20.h"
 #include "PH.h"
-#include "Turbidity.h"
 #include "GPS.h"
 #include "IMU901.h"
 #include "Navigation.h"
@@ -50,11 +49,6 @@
 #define TELEMETRY_ADC_VREF_MV           3300U
 #define TELEMETRY_PH_SCALE_NUM          1U
 #define TELEMETRY_PH_SCALE_DEN          1U
-#define TELEMETRY_TURBIDITY_SCALE_NUM   3U
-#define TELEMETRY_TURBIDITY_SCALE_DEN   2U
-#define TELEMETRY_TURBIDITY_CLEAR_MV     4200U
-#define TELEMETRY_TURBIDITY_LOW_MV       925U
-#define TELEMETRY_TURBIDITY_MIN_NTU      5U
 #define TELEMETRY_PERIOD_MS              1000U
 #define NAV_UPDATE_PERIOD_MS             50U
 /* USER CODE END PD */
@@ -78,7 +72,6 @@ static uint32_t Telemetry_ReadAdcRaw(uint32_t channel);
 static uint32_t Telemetry_AdcRawToMv(uint32_t raw);
 static int32_t Telemetry_ScaleFloat(float value, float scale);
 static int32_t Telemetry_CalcPhX100(uint32_t sensor_mv);
-static uint32_t Telemetry_CalcTurbidityNtu(uint32_t sensor_mv);
 static void Telemetry_SendData(void);
 /* USER CODE END PFP */
 
@@ -146,48 +139,13 @@ static int32_t Telemetry_CalcPhX100(uint32_t sensor_mv)
   return Telemetry_ScaleFloat(ph, 100.0f);
 }
 
-static uint32_t Telemetry_CalcTurbidityNtu(uint32_t sensor_mv)
-{
-  float voltage;
-  float ntu;
-
-  if (sensor_mv >= TELEMETRY_TURBIDITY_CLEAR_MV)
-  {
-    return TELEMETRY_TURBIDITY_MIN_NTU;
-  }
-
-  if (sensor_mv <= TELEMETRY_TURBIDITY_LOW_MV)
-  {
-    return 3000U;
-  }
-
-  voltage = (float)sensor_mv / 1000.0f;
-  ntu = -1120.4f * voltage * voltage + 5742.3f * voltage - 4352.9f;
-
-  if (ntu < (float)TELEMETRY_TURBIDITY_MIN_NTU) ntu = (float)TELEMETRY_TURBIDITY_MIN_NTU;
-  if (ntu > 3000.0f) ntu = 3000.0f;
-
-  return (uint32_t)(ntu + 0.5f);
-}
-
 static void Telemetry_SendData(void)
 {
   static uint32_t seq = 0;
   uint32_t ph_raw = Telemetry_ReadAdcRaw(PH_ADC_CHANNEL);
-  uint32_t turb_raw = Telemetry_ReadAdcRaw(TURBIDITY_ADC_CHANNEL);
   uint32_t ph_adc_mv = (ph_raw == 0xFFFFFFFFU) ? 0U : Telemetry_AdcRawToMv(ph_raw);
-  uint32_t turb_adc_mv = (turb_raw == 0xFFFFFFFFU) ? 0U : Telemetry_AdcRawToMv(turb_raw);
   uint32_t ph_sensor_mv = ph_adc_mv * TELEMETRY_PH_SCALE_NUM / TELEMETRY_PH_SCALE_DEN;
-  uint32_t turb_sensor_mv = turb_adc_mv * TELEMETRY_TURBIDITY_SCALE_NUM / TELEMETRY_TURBIDITY_SCALE_DEN;
-  uint8_t turb_status = 1U;
   int32_t ph_x100 = (ph_raw == 0xFFFFFFFFU) ? 0 : Telemetry_CalcPhX100(ph_sensor_mv);
-  uint32_t turb_ntu = (turb_raw == 0xFFFFFFFFU) ? 0U : Telemetry_CalcTurbidityNtu(turb_sensor_mv);
-  uint8_t turb_dout = (HAL_GPIO_ReadPin(TURBIDITY_DIGITAL_PORT, TURBIDITY_DIGITAL_PIN) == GPIO_PIN_SET) ? 1U : 0U;
-
-  if (turb_raw == 0xFFFFFFFFU)
-  {
-    turb_status = 0U;
-  }
   float temp = DS18B20_GetTemp();
   uint8_t temp_valid = (temp > -100.0f) ? 1U : 0U;
   int32_t temp_x100 = temp_valid ? Telemetry_ScaleFloat(temp, 100.0f) : 0;
@@ -206,7 +164,6 @@ static void Telemetry_SendData(void)
 
   Lora_Printf("{\"t\":\"data\",\"v\":1,\"seq\":%lu,\"ms\":%lu,"
               "\"ph\":%ld,\"phr\":%lu,\"phmv\":%lu,"
-              "\"tb\":%lu,\"tbr\":%lu,\"tbmv\":%lu,\"td\":%u,\"tbv\":%u,"
               "\"tc\":%ld,\"tv\":%u,"
               "\"fix\":%u,\"sat\":%u,\"lat\":%ld,\"lon\":%ld,"
               "\"iv\":%u,\"ir\":%ld,\"ip\":%ld,\"iy\":%ld,\"ib\":%lu,\"ia\":%lu,"
@@ -219,11 +176,6 @@ static void Telemetry_SendData(void)
               (long)ph_x100,
               (unsigned long)((ph_raw == 0xFFFFFFFFU) ? 0U : ph_raw),
               (unsigned long)ph_sensor_mv,
-              (unsigned long)turb_ntu,
-              (unsigned long)((turb_raw == 0xFFFFFFFFU) ? 0U : turb_raw),
-              (unsigned long)turb_sensor_mv,
-              turb_dout,
-              turb_status,
               (long)temp_x100,
               temp_valid,
               gps_data.fix,
@@ -422,6 +374,9 @@ int main(void)
 
     {
       uint32_t now = HAL_GetTick();
+
+      /* 温度采集状态机：非阻塞，必须在主循环里持续推进 */
+      DS18B20_Update();
 
       if ((now - last_nav_update_ms) >= NAV_UPDATE_PERIOD_MS)
       {

@@ -141,9 +141,12 @@ function riskLevel(sample, zone) {
   const phTrust = edgeTrustSample(sample, 'ph');
   const tempTrust = edgeTrustSample(sample, 'temperature');
   if (phTrust.level === 'warning' || tempTrust.level === 'warning') return { level: 'warning', label: '需复测', hint: '边缘 AI 标记部分数据需要复测。' };
-  if (water.ph == null || water.tempC == null || water.turbidity == null) return { level: 'unknown', label: '数据不全', hint: '样本字段不足，无法完成规则判断。' };
-  if (water.ph < thresholds.phMin || water.ph > thresholds.phMax || water.tempC < thresholds.tempMin || water.tempC > thresholds.tempMax || water.turbidity > thresholds.turbidityMax * 1.25) return { level: 'danger', label: '危险', hint: '至少一项指标明显超出适宜范围。' };
-  if (water.ph < thresholds.phMin + .2 || water.ph > thresholds.phMax - .2 || water.tempC < thresholds.tempMin + 1 || water.tempC > thresholds.tempMax - 1 || water.turbidity > thresholds.turbidityMax) return { level: 'warning', label: '预警', hint: '至少一项指标接近或略超阈值。' };
+  if (water.ph == null || water.tempC == null) return { level: 'unknown', label: '数据不全', hint: '样本缺少 pH 或水温，无法完成规则判断。' };
+  /* 浊度传感器已停用：只有确实采到数值时才参与判断 */
+  const turbOver = water.turbidity != null && water.turbidity > thresholds.turbidityMax * 1.25;
+  const turbNear = water.turbidity != null && water.turbidity > thresholds.turbidityMax;
+  if (water.ph < thresholds.phMin || water.ph > thresholds.phMax || water.tempC < thresholds.tempMin || water.tempC > thresholds.tempMax || turbOver) return { level: 'danger', label: '危险', hint: '至少一项指标明显超出适宜范围。' };
+  if (water.ph < thresholds.phMin + .2 || water.ph > thresholds.phMax - .2 || water.tempC < thresholds.tempMin + 1 || water.tempC > thresholds.tempMax - 1 || turbNear) return { level: 'warning', label: '预警', hint: '至少一项指标接近或略超阈值。' };
   return { level: 'normal', label: '正常', hint: '当前持久化样本位于配置阈值内。' };
 }
 
@@ -222,7 +225,7 @@ function renderKpis() {
   $('turbidityValue').textContent = turb == null ? '—' : dash(turb);
   setTrust('phTrust', edgeTrustTelemetry(data, 'ph'));
   setTrust('tempTrust', edgeTrustTelemetry(data, 'temperature'));
-  setTrust('turbTrust', data ? { text: Number(data.tbv) === 1 ? '有效' : Number(data.tbv) === 0 ? '无效' : '未标记', level: Number(data.tbv) === 1 ? 'normal' : 'warning' } : { text: '等待', level: 'unknown' });
+  setTrust('turbTrust', !data ? { text: '等待', level: 'unknown' } : data.tbv === undefined ? { text: '未接入', level: 'unknown' } : { text: Number(data.tbv) === 1 ? '有效' : '无效', level: Number(data.tbv) === 1 ? 'normal' : 'warning' });
   $('phRange').textContent = thresholds ? `适宜 ${thresholds.phMin}–${thresholds.phMax}` : '选择区域后显示阈值';
   $('tempRange').textContent = thresholds ? `适宜 ${thresholds.tempMin}–${thresholds.tempMax}°C` : '选择区域后显示阈值';
   $('turbRange').textContent = thresholds ? `上限 ${thresholds.turbidityMax} NTU` : '选择区域后显示阈值';

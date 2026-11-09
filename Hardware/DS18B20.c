@@ -1,6 +1,19 @@
 #include "main.h"
 #include "DS18B20.h"
 
+/* ============================================================
+ * DS18B20 单总线驱动（非阻塞版）
+ *
+ * 原实现每次读温度都在主循环里轮询 750ms 等转换完成，直接把
+ * Navigation_Update() 的 50ms 周期拖成 ~1.2Hz，航向 PID 无法工作。
+ * 现改为状态机：主循环调用 DS18B20_Update() 推进，GetTemp() 只取缓存。
+ * ============================================================ */
+
+static float    s_temp_c      = -1000.0f;
+static uint8_t  s_temp_valid  = 0U;
+static uint8_t  s_conv_busy   = 0U;
+static uint32_t s_conv_start  = 0U;
+static uint32_t s_last_start  = 0U;
 
 static void DS18B20_DelayUs(uint32_t us)
 {
@@ -43,36 +56,39 @@ void DS18B20_Init(void)
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
     DWT->CYCCNT = 0;
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
-    
-    DS18B20_SetPinOutput();
-    DS18B20_WritePin(GPIO_PIN_SET);
+
+    s_temp_c     = -1000.0f;
+    s_temp_valid = 0U;
+    s_conv_busy  = 0U;
+    s_conv_start = 0U;
+    s_last_start = HAL_GetTick();
 }
 
 uint8_t DS18B20_Reset(void)
 {
     uint8_t presence = 0;
-    
+
     DS18B20_SetPinOutput();
     DS18B20_WritePin(GPIO_PIN_RESET);
     DS18B20_DelayUs(480);
-    
+
     DS18B20_SetPinInput();
     DS18B20_DelayUs(70);
-    
+
     if (DS18B20_ReadPin() == GPIO_PIN_RESET)
     {
         presence = 1;
     }
-    
+
     DS18B20_DelayUs(410);
-    
+
     return presence;
 }
 
 void DS18B20_WriteByte(uint8_t data)
 {
     DS18B20_SetPinOutput();
-    
+
     for (uint8_t i = 0; i < 8; i++)
     {
         if (data & 0x01)
@@ -96,112 +112,103 @@ void DS18B20_WriteByte(uint8_t data)
 uint8_t DS18B20_ReadByte(void)
 {
     uint8_t data = 0;
-    
+
     for (uint8_t i = 0; i < 8; i++)
     {
         DS18B20_SetPinOutput();
         DS18B20_WritePin(GPIO_PIN_RESET);
         DS18B20_DelayUs(6);
-        
+
         DS18B20_SetPinInput();
         DS18B20_DelayUs(9);
-        
+
         if (DS18B20_ReadPin() == GPIO_PIN_SET)
         {
             data |= (0x01 << i);
         }
-        
+
         DS18B20_DelayUs(55);
     }
-    
+
     return data;
+}
+
+static void DS18B20_BeginConversion(void)
+{
+    if (!DS18B20_Reset())
+    {
+        s_temp_valid = 0U;
+        return;
+    }
+
+    DS18B20_WriteByte(0xCC);   /* Skip ROM：总线上只有一个器件 */
+    DS18B20_WriteByte(0x44);   /* Convert T */
+
+    s_conv_busy  = 1U;
+    s_conv_start = HAL_GetTick();
+}
+
+static void DS18B20_ReadScratchpad(void)
+{
+    uint8_t t_lsb = 0;
+    uint8_t t_msb = 0;
+    int16_t raw;
+
+    if (!DS18B20_Reset())
+    {
+        s_temp_valid = 0U;
+        return;
+    }
+
+    /* 位时序窗口只有几十微秒，期间被 UART 中断打断会读错
+       （这正是原来"85°C"假值的来源）。临界区约 2ms，每秒一次。 */
+    __disable_irq();
+    DS18B20_WriteByte(0xCC);   /* Skip ROM */
+    DS18B20_WriteByte(0xBE);   /* Read Scratchpad */
+    t_lsb = DS18B20_ReadByte();
+    t_msb = DS18B20_ReadByte();
+    __enable_irq();
+
+    raw = (int16_t)(((uint16_t)t_msb << 8) | t_lsb);
+
+    /* 上电默认值 0x0550 = 85℃：说明转换没完成或器件没应答 */
+    if (raw == 0x0550)
+    {
+        s_temp_valid = 0U;
+        return;
+    }
+
+    s_temp_c = (float)raw / 16.0f;
+    s_temp_valid = (s_temp_c > -55.0f && s_temp_c < 125.0f) ? 1U : 0U;
+}
+
+void DS18B20_Update(void)
+{
+    uint32_t now = HAL_GetTick();
+
+    if (s_conv_busy)
+    {
+        if ((now - s_conv_start) >= DS18B20_CONV_MS)
+        {
+            s_conv_busy = 0U;
+            DS18B20_ReadScratchpad();
+        }
+        return;
+    }
+
+    if ((now - s_last_start) >= DS18B20_PERIOD_MS)
+    {
+        s_last_start = now;
+        DS18B20_BeginConversion();
+    }
 }
 
 float DS18B20_GetTemp(void)
 {
-    uint8_t tempL, tempH;
-    int16_t temp;
-    float temperature;
-    uint32_t timeout;
-
-    if (!DS18B20_Reset())
-    {
-        return -1000.0f;
-    }
-
-    DS18B20_WriteByte(0xCC);
-    DS18B20_WriteByte(0x44);
-
-    // 等待转换完成：DS18B20 在转换期间返回 0，完成后返回 1
-    timeout = 1000; // 最多等约 1 秒
-    while (timeout > 0)
-    {
-        DS18B20_SetPinOutput();
-        DS18B20_WritePin(GPIO_PIN_RESET);
-        DS18B20_DelayUs(6);
-        DS18B20_SetPinInput();
-        DS18B20_DelayUs(9);
-
-        if (DS18B20_ReadPin() == GPIO_PIN_SET)
-        {
-            DS18B20_DelayUs(55);
-            break; // 转换完成
-        }
-
-        DS18B20_DelayUs(55);
-        HAL_Delay(1);
-        timeout--;
-    }
-
-    if (timeout == 0)
-    {
-        return -1000.0f; // 转换超时
-    }
-
-    if (!DS18B20_Reset())
-    {
-        return -1000.0f;
-    }
-
-    DS18B20_WriteByte(0xCC);
-    DS18B20_WriteByte(0xBE);
-
-    tempL = DS18B20_ReadByte();
-    tempH = DS18B20_ReadByte();
-
-    temp = (tempH << 8) | tempL;
-
-    // 检查是否是默认值 0x0550 (85°C)
-    if (temp == 0x0550)
-    {
-        return -1000.0f; // 未完成转换，返回错误
-    }
-
-    temperature = (float)temp / 16.0f;
-
-    return temperature;
+    return s_temp_valid ? s_temp_c : -1000.0f;
 }
 
-float DS18B20_GetTempMultiple(uint8_t samples)
+uint8_t DS18B20_IsValid(void)
 {
-    float sum = 0.0f;
-    uint8_t validCount = 0;
-    
-    for (uint8_t i = 0; i < samples; i++)
-    {
-        float temp = DS18B20_GetTemp();
-        if (temp > -100.0f)
-        {
-            sum += temp;
-            validCount++;
-        }
-        HAL_Delay(100);
-    }
-    
-    if (validCount == 0)
-    {
-        return -1000.0f;
-    }
-    
-    return sum / (float)validCount;
+    return s_temp_valid;
 }
