@@ -1,13 +1,15 @@
 {
   "version": 1,
   "samplingConfig": {
-    "arrivalRadiusM": 1,
-    "fallbackRadiusM": 5,
-    "fallbackAfterMs": 60000,
-    "targetTimeoutMs": 600000,
-    "stabilizationMs": 30000,
-    "sampleIntervalMs": 5000,
-    "sampleDurationMs": 3600000
+    "arrivalRadiusM": 2,
+    "fallbackRadiusM": 6,
+    "boundaryMarginM": 4,
+    "returnRadiusM": 8,
+    "fallbackAfterMs": 30000,
+    "targetTimeoutMs": 180000,
+    "stabilizationMs": 10000,
+    "sampleIntervalMs": 2000,
+    "sampleDurationMs": 30000
   },
   "zones": [
     {

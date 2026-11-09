@@ -16,17 +16,25 @@ const DATA_DIR = path.join(__dirname, 'data');
 const ZONES_FILE = path.join(DATA_DIR, 'zones.json');
 const SAMPLES_FILE = path.join(DATA_DIR, 'samples.jsonl');
 
+// 演示尺度默认值。原始值是"每点采样 1 小时 × 8 点 = 8 小时"，只适合真实生产作业，
+// 演示和联调必须能在一轮内跑完，所以这里按"单点 30 秒"标定。
+// 生产部署时在 WebUI「巡检任务 → 任务参数」里改回去即可。
 const DEFAULT_SAMPLING_CONFIG = {
-  arrivalRadiusM: 1,
-  fallbackRadiusM: 5,
-  boundaryMarginM: 2,
-  returnRadiusM: 8,
-  fallbackAfterMs: 60 * 1000,
-  targetTimeoutMs: 10 * 60 * 1000,
-  stabilizationMs: 30 * 1000,
-  sampleIntervalMs: 5 * 1000,
-  sampleDurationMs: 60 * 60 * 1000,
+  arrivalRadiusM: 2,          // 到点判定，放宽以适应 GPS 静差
+  fallbackRadiusM: 6,         // 保持/兜底半径
+  boundaryMarginM: 4,         // 越界容差
+  returnRadiusM: 8,           // 越界后归位触发半径
+  fallbackAfterMs: 30 * 1000, // 进 6m 后 30 秒仍未进 2m 就降级接受
+  targetTimeoutMs: 3 * 60 * 1000,
+  stabilizationMs: 10 * 1000,
+  sampleIntervalMs: 2 * 1000,
+  sampleDurationMs: 30 * 1000,
 };
+
+// 采样点在区域矩形内的收缩比例（1.0 = 贴边界，0.65 = 向内缩 35% 半宽）。
+// 原实现把 8 个点摆在矩形边上，GPS 静差 3~5m 时会频繁误判"越界归位"，
+// 船在采样点附近来回抽搐、永远稳不下来。
+const SAMPLE_POINT_INSET_RATIO = 0.65;
 
 const BUILTIN_SPECIES = {
   grass_carp: {
@@ -1539,8 +1547,8 @@ function generateSamplePoints(zone) {
   const widthM = Number(zone.geometry.widthM) || 10;
   const metersPerDegreeLat = 111320;
   const metersPerDegreeLon = 111320 * Math.cos(center.latitude * Math.PI / 180) || 111320;
-  const halfLat = (lengthM / 2) / metersPerDegreeLat;
-  const halfLon = (widthM / 2) / metersPerDegreeLon;
+  const halfLat = ((lengthM / 2) * SAMPLE_POINT_INSET_RATIO) / metersPerDegreeLat;
+  const halfLon = ((widthM / 2) * SAMPLE_POINT_INSET_RATIO) / metersPerDegreeLon;
 
   const south = center.latitude - halfLat;
   const north = center.latitude + halfLat;

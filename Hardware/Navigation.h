@@ -48,10 +48,13 @@ typedef struct
     float kp;
     float ki;
     float kd;
-    float integral;
+    float integral;          // 积分项（已乘时间，单位：误差·秒）
     float prev_error;
+    float prev_derivative;   // 低通后的微分值
     float integral_limit;
     float output_limit;
+    float derivative_filter; // 0~1，越大越平滑；0 = 不平滑
+    uint8_t primed;          // 0 = 尚未预置，首帧不产生导数冲击
 } PID_t;
 
 // 导航结构体
@@ -107,8 +110,18 @@ float Navigation_CalcDistance(float lat1, float lon1, float lat2, float lon2);
 float Navigation_CalcBearing(float lat1, float lon1, float lat2, float lon2);
 float Navigation_NormalizeAngle(float angle);
 
-void PID_Init(PID_t *pid, float kp, float ki, float kd, float integral_limit, float output_limit);
-float PID_Calculate(PID_t *pid, float error);
+void PID_Init(PID_t *pid, float kp, float ki, float kd,
+              float integral_limit, float output_limit, float derivative_filter);
+
+/**
+ * @brief  按真实时间步长计算 PID 输出
+ * @param  pid     PID 实例
+ * @param  error   当前误差（单位与 kp 匹配）
+ * @param  dt_s    距上次调用的秒数，内部会钳到 [0.01, 0.5]
+ * @note   带条件积分抗饱和：输出已饱和且误差同向时不再累积积分，
+ *         避免长时间偏航后积分爆掉、回正时过冲。
+ */
+float PID_Calculate(PID_t *pid, float error, float dt_s);
 
 #ifdef __cplusplus
 }

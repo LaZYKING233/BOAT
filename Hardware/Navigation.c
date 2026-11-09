@@ -8,7 +8,6 @@
 #define NAV_MIN_RADIUS_M 0.5f
 #define NAV_MAX_RADIUS_M 200.0f
 #define NAV_CROSS_TRACK_LIMIT_DEG 30.0f
-#define NAV_CROSS_TRACK_GAIN_DEG_PER_M 1.5f
 #define NAV_FINAL_APPROACH_M 10.0f
 
 Navigation_t nav;
@@ -31,36 +30,65 @@ static float Navigation_DefaultRadius(float value, float fallback)
     return value;
 }
 
-void PID_Init(PID_t *pid, float kp, float ki, float kd, float integral_limit, float output_limit)
+void PID_Init(PID_t *pid, float kp, float ki, float kd,
+              float integral_limit, float output_limit, float derivative_filter)
 {
     pid->kp = kp;
     pid->ki = ki;
     pid->kd = kd;
     pid->integral = 0;
     pid->prev_error = 0;
+    pid->prev_derivative = 0;
     pid->integral_limit = integral_limit;
     pid->output_limit = output_limit;
+    pid->derivative_filter = (derivative_filter < 0.0f) ? 0.0f
+                           : (derivative_filter > 0.95f) ? 0.95f
+                           : derivative_filter;
+    pid->primed = 0;
 }
 
-float PID_Calculate(PID_t *pid, float error)
+float PID_Calculate(PID_t *pid, float error, float dt_s)
 {
-    float output;
+    float p, d, output;
+    float raw_derivative;
 
-    // 积分
-    pid->integral += error;
+    // 时间步长钳位：首帧、调度抖动、主循环被阻塞后都不能让微分项爆掉
+    if (dt_s < 0.01f) dt_s = 0.01f;
+    if (dt_s > 0.50f) dt_s = 0.50f;
 
-    // 积分限幅
-    if (pid->integral > pid->integral_limit)
-        pid->integral = pid->integral_limit;
-    if (pid->integral < -pid->integral_limit)
-        pid->integral = -pid->integral_limit;
+    // 首帧预置：把 prev_error 对齐到当前误差，否则 (error-0)/dt 会产生巨大导数冲击，
+    // 表现是刚启动导航瞬间电机打满、船原地甩头。
+    if (!pid->primed)
+    {
+        pid->prev_error = error;
+        pid->prev_derivative = 0.0f;
+        pid->primed = 1u;
+    }
 
-    // PID计算
-    output = pid->kp * error
-           + pid->ki * pid->integral
-           + pid->kd * (error - pid->prev_error);
+    // 比例
+    p = pid->kp * error;
+
+    // 微分：先差分再一阶低通，抑制 GPS/IMU 抖动被 1/dt 放大
+    raw_derivative = (error - pid->prev_error) / dt_s;
+    pid->prev_derivative = pid->derivative_filter * pid->prev_derivative
+                         + (1.0f - pid->derivative_filter) * raw_derivative;
+    d = pid->kd * pid->prev_derivative;
+
+    // 条件积分抗饱和：输出未饱和时才累积
+    output = p + pid->ki * pid->integral + d;
+    if ((output < pid->output_limit) && (output > -pid->output_limit))
+    {
+        pid->integral += error * dt_s;
+
+        if (pid->integral > pid->integral_limit)
+            pid->integral = pid->integral_limit;
+        if (pid->integral < -pid->integral_limit)
+            pid->integral = -pid->integral_limit;
+    }
 
     pid->prev_error = error;
+
+    output = p + pid->ki * pid->integral + d;
 
     // 输出限幅
     if (output > pid->output_limit)
@@ -132,6 +160,8 @@ static void Navigation_ResetLeg(void)
     nav.corrected_heading = 0;
     crosstrack_pid.integral = 0;
     crosstrack_pid.prev_error = 0;
+    crosstrack_pid.prev_derivative = 0;
+    crosstrack_pid.primed = 0;
 }
 
 static void Navigation_UpdateLegStart(void)
@@ -175,14 +205,22 @@ void Navigation_Init(void)
     nav.return_distance_m = 0;
     Navigation_ResetLeg();
 
-    // 航向PID参数（需要根据实际调试调整）
-    // kp: 比例系数 - 航向误差1度时转向输出的基本量
-    // ki: 积分系数 - 抵消持续的风/水流偏移
-    // kd: 微分系数 - 抑制转向振荡
-    PID_Init(&heading_pid, 2.0f, 0.05f, 1.0f, 500.0f, (float)NAV_MAX_TURN_SPEED);
+    /* 航向 PID（量纲按 20Hz 标定，dt 由 Navigation_Update 实测传入）
+     *   kp = 2.0      PWM/dag      : 偏 1 度给 2 个 PWM，40 度打满
+     *   ki = 0.35     PWM/(dag*s)  : 抵消持续侧风/水流造成的固定偏差
+     *   kd = 0.25     PWM/(dag/s)  : 抑制转向超调
+     *   integral_limit = 60        : 积分最多贡献 0.35*60 = 21 PWM
+     *   derivative_filter = 0.7    : 微分一阶低通，滤掉 IMU 抖动
+     */
+    PID_Init(&heading_pid, 2.0f, 0.35f, 0.25f, 60.0f, (float)NAV_MAX_TURN_SPEED, 0.7f);
 
-    // 横向偏差PID输出为航向修正角，抑制水流/风导致的离线漂移
-    PID_Init(&crosstrack_pid, 0.8f, 0.02f, 0.2f, 80.0f, NAV_CROSS_TRACK_LIMIT_DEG);
+    /* 横向偏差 PID（输入=米，输出=航向修正角）
+     *   kp = 2.3      dag/m       : 偏 1 米修 2.3 度
+     *   ki = 0.30     dag/(m*s)   : 消除侧流导致的持续横偏
+     *   kd = 0.12     dag/(m/s)
+     *   output_limit = 30 度      : 横偏修正不应喧宾夺主
+     */
+    PID_Init(&crosstrack_pid, 2.3f, 0.30f, 0.12f, 40.0f, NAV_CROSS_TRACK_LIMIT_DEG, 0.7f);
 }
 
 void Navigation_SetTarget(float lat, float lon)
@@ -234,8 +272,12 @@ void Navigation_Start(void)
         // 重置PID积分项
         heading_pid.integral = 0;
         heading_pid.prev_error = 0;
+        heading_pid.prev_derivative = 0;
+        heading_pid.primed = 0;
         crosstrack_pid.integral = 0;
         crosstrack_pid.prev_error = 0;
+        crosstrack_pid.prev_derivative = 0;
+        crosstrack_pid.primed = 0;
         Navigation_UpdateLegStart();
     }
 }
@@ -285,7 +327,7 @@ static int Navigation_UpdateBoundaryState(float current_lat, float current_lon)
     return 1;
 }
 
-static float Navigation_CrossTrackHeading(float current_lat, float current_lon)
+static float Navigation_CrossTrackHeading(float current_lat, float current_lon, float dt_s)
 {
     float target_east, target_north, current_east, current_north;
     float leg_len, cross_track, correction, direct_heading, blend;
@@ -311,7 +353,9 @@ static float Navigation_CrossTrackHeading(float current_lat, float current_lon)
 
     cross_track = (target_east * current_north - target_north * current_east) / leg_len;
     nav.cross_track_error_m = cross_track;
-    correction = -cross_track * NAV_CROSS_TRACK_GAIN_DEG_PER_M + PID_Calculate(&crosstrack_pid, -cross_track);
+    /* 原来这里是「固定比例 + PID」叠加在同一个误差上，等效比例增益被算了两遍，
+     * 而且积分/微分也跟比例项混在一起，无法单独整定。现在只保留 PID。 */
+    correction = PID_Calculate(&crosstrack_pid, -cross_track, dt_s);
     correction = Navigation_ClampFloat(correction, -NAV_CROSS_TRACK_LIMIT_DEG, NAV_CROSS_TRACK_LIMIT_DEG);
 
     // 临近目标时逐步切回直达目标，避免为贴线而绕过目标点
@@ -322,7 +366,7 @@ static float Navigation_CrossTrackHeading(float current_lat, float current_lon)
 
 // 导航更新函数，在主循环中周期性调用
 // 内部：执行导航/保持的电机输出
-static void Navigation_DriveHeading(float desired_heading, float current_yaw, int16_t base_speed)
+static void Navigation_DriveHeading(float desired_heading, float current_yaw, int16_t base_speed, float dt_s)
 {
     int16_t left_speed, right_speed;
 
@@ -331,8 +375,8 @@ static void Navigation_DriveHeading(float desired_heading, float current_yaw, in
     // 计算航向误差（归一化到 -180 ~ 180）
     nav.heading_error = Navigation_NormalizeAngle(nav.target_heading - current_yaw);
 
-    // PID计算转向输出
-    nav.turn_output = (int16_t)PID_Calculate(&heading_pid, nav.heading_error);
+    // PID计算转向输出（带真实时间步长）
+    nav.turn_output = (int16_t)PID_Calculate(&heading_pid, nav.heading_error, dt_s);
 
     // 根据航向误差调整前进速度
     if (fabsf(nav.heading_error) > 60.0f)
@@ -356,15 +400,24 @@ static void Navigation_DriveHeading(float desired_heading, float current_yaw, in
     Motor_Go_PWM(MOTOR_SPEED_RIGHT, right_speed);
 }
 
-static void Navigation_DriveToPoint(float current_lat, float current_lon, float current_yaw, float target_lat, float target_lon, int16_t base_speed)
+static void Navigation_DriveToPoint(float current_lat, float current_lon, float current_yaw, float target_lat, float target_lon, int16_t base_speed, float dt_s)
 {
-    Navigation_DriveHeading(Navigation_CalcBearing(current_lat, current_lon, target_lat, target_lon), current_yaw, base_speed);
+    Navigation_DriveHeading(Navigation_CalcBearing(current_lat, current_lon, target_lat, target_lon), current_yaw, base_speed, dt_s);
 }
 
 void Navigation_Update(void)
 {
+    static uint32_t last_tick = 0;
+    uint32_t now_tick;
+    float dt_s;
     float current_lat, current_lon, current_yaw, desired_heading;
     NavState_t resume_state;
+
+    /* 真实时间步长：PID 的积分/微分都依赖它。
+     * 首帧按 50ms 估；即使中间被别的任务拖慢，dt 也会在 PID 内部钳位。 */
+    now_tick = HAL_GetTick();
+    dt_s = (last_tick == 0) ? 0.05f : (float)(now_tick - last_tick) / 1000.0f;
+    last_tick = now_tick;
 
     if (nav.state == NAV_IDLE)
     {
@@ -404,7 +457,7 @@ void Navigation_Update(void)
         nav.return_distance_m = Navigation_CalcDistance(current_lat, current_lon,
                                                         nav.boundary_center_lat, nav.boundary_center_lon);
         Navigation_DriveToPoint(current_lat, current_lon, current_yaw,
-                                nav.boundary_center_lat, nav.boundary_center_lon, NAV_HOLD_SPEED);
+                                nav.boundary_center_lat, nav.boundary_center_lon, NAV_HOLD_SPEED, dt_s);
         return;
     }
     else if (nav.state == NAV_RETURNING)
@@ -424,8 +477,8 @@ void Navigation_Update(void)
             return;
         }
 
-        desired_heading = Navigation_CrossTrackHeading(current_lat, current_lon);
-        Navigation_DriveHeading(desired_heading, current_yaw, NAV_BASE_SPEED);
+        desired_heading = Navigation_CrossTrackHeading(current_lat, current_lon, dt_s);
+        Navigation_DriveHeading(desired_heading, current_yaw, NAV_BASE_SPEED, dt_s);
     }
     else if (nav.state == NAV_HOLDING)
     {
@@ -434,7 +487,7 @@ void Navigation_Update(void)
         {
             resume_state = nav.state;
             nav.state = NAV_NAVIGATING;
-            Navigation_DriveToPoint(current_lat, current_lon, current_yaw, nav.target_lat, nav.target_lon, NAV_HOLD_SPEED);
+            Navigation_DriveToPoint(current_lat, current_lon, current_yaw, nav.target_lat, nav.target_lon, NAV_HOLD_SPEED, dt_s);
             nav.state = resume_state;
         }
         else
