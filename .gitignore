@@ -40,10 +40,25 @@ node_modules/
 *.fls
 *.fdb_latexmk
 
+# ---------- boatctl 录制与临时产物 ----------
+tools/boatctl/tmp/
+*.jsonl
+record-*.jsonl
+
 # ---------- 归档与参考资料（不属于本项目代码）----------
 # 注意用 /archive/ 锚定根目录，否则会连 docs/archive/ 一起忽略
 /archive/
 资料/
+
+# ---------- 船体 CAD 工作目录 ----------
+# 正在实时编辑的建模脚本与中间产物（.npy/.STL），暂不纳入版本控制。
+# 若要纳入，删掉这条规则并单独提交一次。
+/模型/
+
+# ---------- Python 产物 ----------
+__pycache__/
+*.pyc
+*.npy
 
 # ---------- 系统 ----------
 Thumbs.db

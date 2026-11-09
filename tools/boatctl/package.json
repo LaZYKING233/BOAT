@@ -1,0 +1,13 @@
+{
+  "name": "boatctl",
+  "version": "0.1.0",
+  "private": true,
+  "description": "智航清泓上位机：自动化控制与遥测诊断（零依赖，走 WebUI 桥）",
+  "bin": { "boatctl": "bin/boatctl.js" },
+  "main": "src/client.js",
+  "scripts": {
+    "selftest": "node bin/boatctl.js selftest",
+    "sim": "node bin/boatctl.js sim"
+  },
+  "engines": { "node": ">=22" }
+}

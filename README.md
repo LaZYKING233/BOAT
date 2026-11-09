@@ -35,6 +35,7 @@ BOAT/
 ├── Drivers/                 STM32 HAL / CMSIS（原样保留）
 ├── Debug/                   CubeIDE 构建目录（保留 makefile，产物忽略）
 ├── WebUI/                   Node.js 后端 + 浏览器前端
+├── tools/boatctl/           上位机自动化工具（自检 / 录制 / 模拟）
 ├── docs/                    文档（BRINGUP、产品计划、归档）
 ├── 材料/                    历次比赛的设计文档、素材与提交包
 ├── 资料/                    器件手册与模块示例（不参与构建）
@@ -73,6 +74,15 @@ npm start       # http://localhost:3000
 ```
 
 Windows 上也可以直接双击 `WebUI/run-webui.bat`（会自动检查端口占用）。
+
+### 3. 一条命令自检
+
+```bash
+node tools/boatctl/bin/boatctl.js selftest --open COM7 --out report.json
+```
+
+会自动连串口、采一段数据、按 8 项判据给出通过/警告/失败，退出码可直接用于脚本。
+详见 [`tools/boatctl/README.md`](tools/boatctl/README.md)。
 
 ---
 
@@ -155,6 +165,7 @@ Windows 上也可以直接双击 `WebUI/run-webui.bat`（会自动检查端口�
 | 文件 | 内容 |
 |---|---|
 | [`docs/BRINGUP.md`](docs/BRINGUP.md) | **上板联调手册**，9 步 + 故障对照表 + PID 调参方向 |
+| [`tools/boatctl/README.md`](tools/boatctl/README.md) | **上位机自动化工具**，自检判定项 + 脚本 API |
 | [`docs/PRODUCT_PLAN.md`](docs/PRODUCT_PLAN.md) | 产品模型、数据模型、采样流程 |
 | [`docs/archive/`](docs/archive/) | 历史计划与项目笔记（已过期，勿照做） |
 | `材料/` | 历次比赛设计文档（LaTeX 源）、演示视频素材、照片 |
