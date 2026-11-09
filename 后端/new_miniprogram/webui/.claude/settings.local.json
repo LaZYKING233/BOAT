@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(python3 \".claude/skills/ui-ux-pro-max/scripts/search.py\" \"dashboard IoT monitoring aquaculture marine dark\" --design-system -p \"智航清泓\")",
-      "Bash(py --version)"
-    ]
-  }
-}

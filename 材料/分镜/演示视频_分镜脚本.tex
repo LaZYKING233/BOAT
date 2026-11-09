@@ -1,0 +1,218 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[UTF8]{ctex}
+\usepackage{array,longtable,booktabs,geometry,xcolor,colortbl}
+\usepackage{enumitem,setspace,fancyhdr}
+\usepackage[pdfencoding=auto,unicode=true]{hyperref}
+\usepackage{titlesec}
+
+% 页面设置
+\geometry{top=1.8cm,bottom=1.8cm,left=2.2cm,right=2.2cm}
+\pagestyle{fancy}
+\fancyhead[L]{智航清泓 · 演示视频分镜脚本（纯功能演示版）}
+\fancyhead[R]{\thepage}
+\fancyfoot[C]{}
+
+% 格式
+\titleformat{\section}{\large\bfseries\centering}{}{0em}{}[\vspace{0.3em}\hrule]
+
+% 颜色
+\definecolor{colA}{rgb}{0.92,0.95,0.98}
+\definecolor{colB}{rgb}{0.98,0.95,0.92}
+\definecolor{colC}{rgb}{0.95,0.98,0.92}
+\definecolor{colH}{rgb}{1.0,0.85,0.85}
+
+\begin{document}
+
+% ===== 封面 =====
+\begin{center}
+\vspace*{1.5cm}
+{\LARGE\bfseries 智航清泓}\\[0.4cm]
+{\Large 基于STM32与LoRa的物联网水质检测无人船}\\[0.3cm]
+{\large —— 演示视频分镜脚本（纯功能演示版）}\\[1.2cm]
+
+{\large 2026 全国大学生嵌入式芯片与系统设计竞赛}\\[0.2cm]
+{\large 意法半导体赛道 · 选题六 IoT}\\[2cm]
+
+\begin{minipage}{0.6\textwidth}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{>{\bfseries}l p{7cm}}
+  \hline
+  视频格式 & MP4 (H.264, 1080p) \\
+  总时长 & 约 2分50秒 \\
+  文件上限 & 300MB \\
+  片头 & 大赛统一封面（$\le$2秒）\\
+  核心要求 & \textbf{全部展示实际运行和功能}，无PPT讲解 \\
+  \hline
+\end{tabular}
+\end{minipage}
+\vspace*{2cm}
+\end{center}
+
+\newpage
+
+% ===== 总体策略 =====
+\section{整体思路}
+
+\textbf{视频定位}：评委只需要看\textbf{这项目到底能干什么、运行起来什么样}。不拍PCB/芯片特写，所有镜头围绕实际功能演示。
+
+\textbf{叙事逻辑}：一个完整的「打开WebUI → 查看各区域状态 → 指挥船去采样 → 数据回传 → 获得分析结论」的工作流。评委跟着镜头走一遍使用流程，自然看懂全部功能。
+
+\begin{center}
+\renewcommand{\arraystretch}{1.5}
+\begin{tabular}{>{\bfseries}p{3cm}p{12cm}}
+  \toprule
+  \textbf{开场（15s）} & 一句话：这是什么场景、有什么功能。拍船体全景 + 关键词。\\
+  \textbf{主体（2min）} & 全部是 WebUI录屏 + 船体实际运行画面。演示一个完整工作流。\\
+  \textbf{结尾（10s）} & 总结。\\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.5cm}
+
+\textbf{拍摄原则}：
+
+\begin{enumerate}[leftmargin=*,itemsep=3pt]
+  \item \textbf{画面永远在动}——要么WebUI鼠标在点、要么船在动、要么数据在跳。
+  \item \textbf{画中画是灵魂}——船体 + WebUI录屏同框，硬件运行和数据变化一目了然。
+  \item \textbf{录屏操作要慢}——鼠标移动要慢、点击要清晰，让评委看清每一步。
+  \item \textbf{字幕提醒重点}——关键步骤加文字标注。
+\end{enumerate}
+
+\newpage
+
+% ===== 分镜表 =====
+\section{分镜表}
+
+\begin{longtable}{>{\centering\arraybackslash}p{0.7cm}|p{0.9cm}|p{5cm}|p{2.8cm}|p{5.5cm}}
+  \toprule
+  \textbf{镜号} & \textbf{时长} & \textbf{画面内容} & \textbf{拍摄方式} & \textbf{旁白} \\
+  \endhead
+  \bottomrule
+  \endfoot
+
+  \hline
+  \rowcolor{colH}
+  01 & $\le$2s & \textbf{标题卡} & 后期加 & 无旁白 \\
+  & & 黑底白字：「智航清泓 · 无人船水质监测系统」 & 字幕 & \\
+\hline
+
+\rowcolor{colA}
+02 & 12s & \textbf{开场·场景引入} & ① 实拍船体 & \textit{（BGM起）} \\
+  & & ① 船体放在水盆/桌面/水边的全景画面（3s） & ② 后期加字幕 & 画面叠四组关键词：水质监测 / 自主导航 / 远程传输 / AI分析 \\
+  & & ② 画面上浮四组关键词，每组2秒 & 不用旁白 & \\
+\hline
+
+\rowcolor{colB}
+03 & 15s & \textbf{开机·WebUI启动} & 画中画 & 打开电脑端WebUI——浏览器输入localhost，三栏仪表盘加载完成 \\
+  & & ① 主画面：录屏——打开浏览器，输入\texttt{localhost:3000}，回车，Dashboard完整加载 & 70\% 录屏 & \\
+  & & ② 小窗：船体通电，LoRa模块LED闪烁 & + 30\% 实拍 & \\
+  & & \textbf{字幕}：「LoRa无线连接成功，数据开始回传」 & & \\
+\hline
+
+\rowcolor{colC}
+04 & 20s & \textbf{主页概览·全貌展示} & 纯屏幕录制 & 这就是系统的核心界面——左栏实时遥测，所有数值一目了然；中栏Leaflet地图显示船位和区域，右栏是控制面板 \\
+  & & 鼠标在WebUI上从左到右慢速扫过 & 鼠标慢移 & \\
+  & & ① 左栏：遥测数据跳动（pH/温度/浊度/GPS/IMU） & & \\
+  & & ② 中栏：地图上船图标+区域卡片，显示数据和风险状态 & & \\
+  & & ③ 右栏：控制面板各功能区 & & \\
+\hline
+
+\rowcolor{colA}
+05 & 18s & \textbf{区域管理·品种配置} & 纯屏幕录制 & 每个区域独立配置品种——A区草鱼、B区虾、C区蟹 \\
+  & & ① 点击A区卡片 → 编辑弹窗：品种「草鱼」、阈值 & & 不同品种自动匹配不同水质标准 \\
+  & & ② 快速切换B区（虾）、C区（蟹） & & \\
+  & & \textbf{字幕}：「A区→草鱼 / B区→虾 / C区→蟹」 & & \\
+\hline
+
+\rowcolor{colB}
+06 & 30s & \textbf{发送目标·指挥出航} & 画中画 & \textbf{（核心镜头）} 选择A区，点击「发送目标」 \\
+  & & ① \textbf{主画面}（录屏）：选择A区，点击发送目标，下行指令显示 & 60\% 录屏 & 指令通过LoRa下发，GPS+IMU开始导航——地图上船移动，状态IDLE→GO\_TO \\
+  & & ② \textbf{小窗}：LoRa模块LED闪烁 & + 40\% 实拍 & \\
+  & & ③ \textbf{主画面}：船图标向A区移动（约15s），ND递减、NT实时修正 & & \\
+\hline
+
+\rowcolor{colC}
+07 & 20s & \textbf{抵达·自动采样} & 画中画 & 船抵达——导航HOLD，自动采样 \\
+  & & ① \textbf{主画面}：ND→0，GO\_TO→HOLD，出现「采样中」 & 60\% 录屏 & 稳定30s后数据保存，A区卡片数据刷新 \\
+  & & ② \textbf{文字过渡}：「稳定中…采样完成」 & + 40\% 实拍 & \\
+  & & ③ \textbf{主画面}：A区卡片数据更新，时间戳刷新 & \textbf{字幕}：「采样完成，数据已更新」 & \\
+\hline
+
+\rowcolor{colA}
+08 & 18s & \textbf{LLM风险分析·AI诊断} & 纯屏幕录制 & 系统把最新数据发给大模型—— \\
+  & & ① 点击A区「查看分析」→ LLM面板展示分析文本 & & 「pH 7.8（正常）✓，水温28.3°C（接近上限）⚠，建议午后增氧」 \\
+  & & ② 面板展示：品种、各项评价、建议 & & 从数据到可操作的养殖建议 \\
+  & & \textbf{字幕}：「AI告诉你数据意味着什么」 & & \\
+\hline
+
+\rowcolor{colB}
+09 & 10s & \textbf{边缘AI传感器检测} & 纯屏幕录制 & STM32端NanoEdge AI检测传感器状态 \\
+  & & 展开高级模式，展示\texttt{aiph=0 ait=0}（正常） & & \textbf{字幕}：「STM32端侧传感器健康检测」 \\
+\hline
+
+\rowcolor{colC}
+10 & 8s & \textbf{多区轮询} & 纯屏幕录制 & 同样流程可应用到任意区域 \\
+  & & 切换显示B区（虾）、C区（蟹），均有最新数据 & & \\
+\hline
+
+\rowcolor{colA}
+11 & 10s & \textbf{结尾} & ① 实拍 & 智航清泓——让每一方水域都清澈透明 \\
+  & & ① 回到船体全景 & ② 后期字幕 & \\
+  & & ② 叠加项目名、团队、竞赛名称 & & \\
+\hline
+\end{longtable}
+
+\newpage
+
+% ===== 完整旁白 =====
+\section{完整旁白脚本}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{>{\bfseries\columncolor{colA}}p{2.2cm}>{\raggedright\arraybackslash}p{14cm}}
+\rowcolor{colA} \textbf{时间} & \textbf{旁白} \\
+\hline
+00:00--00:02 & \textit{（无旁白）} \\[2mm]
+00:02--00:14 & \textit{（BGM起，不出声，字幕展示：水质监测 / 自主导航 / 远程传输 / AI分析）} \\[2mm]
+00:14--00:29 & 打开电脑端WebUI——浏览器输入localhost，三栏仪表盘加载完成。LoRa连接成功，数据开始实时回传。 \\[2mm]
+00:29--00:49 & 这就是系统的核心界面——左栏实时遥测，传感器数值一目了然；中栏Leaflet地图显示船位和养殖区域；右栏是完整的控制面板。 \\[2mm]
+00:49--01:07 & 每个区域独立配置品种——A区草鱼、B区虾、C区蟹。不同品种自动匹配不同的水质标准，精细化养殖管理。 \\[2mm]
+01:07--01:37 & 现在给船下达任务——选择A区，点击发送目标。指令通过LoRa下发到STM32，GPS+IMU自主导航。船在地图上移动，导航状态从IDLE变为GO\_TO，距离不断减小，航向实时修正。 \\[2mm]
+01:37--01:57 & 船抵达目标区域，进入自动采样模式。稳定30秒后，水质数据自动保存——A区卡片刷新为最新数据。全过程全自动。 \\[2mm]
+01:57--02:15 & 系统将数据发给大语言模型分析——「pH 7.8适合草鱼，但水温28.3°C接近上限，建议午后增氧」。从数据采集到养殖建议，全链路打通。 \\[2mm]
+02:15--02:25 & STM32端还运行NanoEdge AI模型，实时判断传感器工作状态，确保数据可信。 \\[2mm]
+02:25--02:33 & 同样的流程可应用到任意区域——一个平台管理整片养殖场。 \\[2mm]
+02:33--02:43 & 智航清泓——让每一方水域都清澈透明。 \\[2mm]
+02:43--02:45 & \textit{（全片结束）} \\
+\end{tabular}
+\end{center}
+
+\newpage
+
+% ===== 拍摄提示 =====
+\section{拍摄与制作提示}
+
+\subsection*{关键要点}
+
+\begin{enumerate}[leftmargin=*,itemsep=6pt]
+  \item \textbf{镜06是灵魂}——「发送目标→船响应→地图移动」是整个视频核心，多拍几遍选最佳。
+  \item \textbf{鼠标操作要慢}——录屏时速度减半、点击后停顿1秒，让评委看清每一步。
+  \item \textbf{画中画布局}：主画面70\%，小窗（实拍）右下角25\%，圆角白边框。
+  \item \textbf{录屏分辨率}：1920×1080，浏览器放大110\%--125\%。
+  \item \textbf{数据变化要真实}——船无法下水时，可手动拖地图图标模拟移动。
+  \item \textbf{不要空镜}——每一秒都在推进演示流程，没有静止展示环节。
+\end{enumerate}
+
+\subsection*{后期参数}
+
+\begin{itemize}[leftmargin=*,itemsep=3pt]
+  \item 剪辑：剪映 / Premiere Pro
+  \item BGM：科技纪录片风格，中速
+  \item 字体：思源黑体/微软雅黑，白色+黑色阴影描边
+  \item 画中画：圆角矩形（8px），1px白边框，右下角
+  \item 关键帧标注：叠加简短文字说明（「LoRa连接中」「导航中↗」「采样完成✓」「LLM分析中…」），每段3-5秒后淡出
+  \item 导出：H.264, 1920×1080, 30fps, 13Mbps码率, AAC音频192kbps，约250MB
+\end{itemize}
+
+\end{document}
