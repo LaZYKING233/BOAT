@@ -61,7 +61,8 @@ void DS18B20_Init(void)
     s_temp_valid = 0U;
     s_conv_busy  = 0U;
     s_conv_start = 0U;
-    s_last_start = HAL_GetTick();
+    /* 让第一圈就启动转换：首次读数在 ~800ms 后到达，而不是 1.8s */
+    s_last_start = HAL_GetTick() - DS18B20_PERIOD_MS;
 }
 
 uint8_t DS18B20_Reset(void)
