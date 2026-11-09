@@ -1,6 +1,6 @@
 {
   "schema": "boatctl.navrun/1",
-  "generatedAt": "2026-11-09T10:15:39.636Z",
+  "generatedAt": "2026-11-09T11:40:26.347Z",
   "run": {
     "id": "synthetic-demo",
     "startedAt": "2026-11-09T10:14:49.703Z",
@@ -90,7 +90,7 @@
     },
     {
       "severity": "warn",
-      "title": "航向保持勉强",
+      "title": "外环跟踪勉强",
       "detail": "65% 时间在 ±10° 内，平均 8.89°",
       "action": "可接受但不够稳。优先看下面的饱和/振荡项。"
     },

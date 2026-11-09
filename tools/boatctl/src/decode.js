@@ -90,6 +90,8 @@ function decodeTelemetry(raw, rxAt) {
     motorRightScale: div(raw.mrs, 100),
     motorLeftOffset: num(raw.mlo),
     motorRightOffset: num(raw.mro),
+    motorLeftDeadzone: num(raw.mlz),
+    motorRightDeadzone: num(raw.mrz),
 
     // ---- 接收计数 ----
     gpsRxBytes: num(raw.gb),

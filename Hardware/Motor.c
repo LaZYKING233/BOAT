@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <math.h>
 
-MotorCal_t motor_cal = { 1.0f, 1.0f, 0, 0 };
+MotorCal_t motor_cal = { 1.0f, 1.0f, 0, 0, 0, 0 };
 
 /* 最近一次实际下发的 PWM（带符号），供遥测上报 */
 static int16_t motor_last_pwm[4] = { 0, 0, 0, 0 };
@@ -22,28 +22,60 @@ void Motor_Init(void)
 void Motor_Go_PWM(MotorId motor, int16_t speed)
 {
     uint16_t pwm_value;
-    int32_t calibrated;
+    int32_t cmd;
+    int32_t magnitude;
+    float   scale;
+    int16_t offset;
+    int16_t deadzone;
 
     if (speed > 100) speed = 100;
     if (speed < -100) speed = -100;
 
-    pwm_value = (uint16_t)(abs((int)speed) * 999 / 100);
+    cmd = abs((int)speed);   /* 0..100，方向由下面的方向脚决定 */
 
-    /* 仅对推进电机应用校准 */
+    /* 取该电机的校准参数 */
     if (motor == MOTOR_SPEED_LEFT)
     {
-        calibrated = (int32_t)(pwm_value * motor_cal.left_scale) + motor_cal.left_offset;
-        if (calibrated < 0) calibrated = 0;
-        if (calibrated > 999) calibrated = 999;
-        pwm_value = (uint16_t)calibrated;
+        scale = motor_cal.left_scale;
+        offset = motor_cal.left_offset;
+        deadzone = motor_cal.left_deadzone;
     }
     else if (motor == MOTOR_SPEED_RIGHT)
     {
-        calibrated = (int32_t)(pwm_value * motor_cal.right_scale) + motor_cal.right_offset;
-        if (calibrated < 0) calibrated = 0;
-        if (calibrated > 999) calibrated = 999;
-        pwm_value = (uint16_t)calibrated;
+        scale = motor_cal.right_scale;
+        offset = motor_cal.right_offset;
+        deadzone = motor_cal.right_deadzone;
     }
+    else
+    {
+        scale = 1.0f;
+        offset = 0;
+        deadzone = 0;
+    }
+
+    if (cmd > 0)
+    {
+        if (deadzone < 0) deadzone = 0;
+        if (deadzone > 600) deadzone = 600;
+
+        /* 死区补偿：把指令 1..100 线性映射到 deadzone..999。
+         * 不做这一步时，cmd=1..5 只输出 10..50 counts，电机不转，
+         * PID 在这个区间等于空转，一过阈值就猛冲 —— 这是调不稳的根源。 */
+        magnitude = deadzone + ((999 - deadzone) * cmd) / 100;
+
+        magnitude = (int32_t)(magnitude * scale) + offset;
+
+        if (magnitude < 1) magnitude = 1;      /* 非零指令至少给 1，别被 scale/offset 抹平 */
+        if (magnitude > 999) magnitude = 999;
+    }
+    else
+    {
+        /* 零指令必须是零输出。原来这里会加上 offset，
+         * 导致 speed=0 时仍有 10 counts 输出，船在"停"的状态下慢慢蠕动。 */
+        magnitude = 0;
+    }
+
+    pwm_value = (uint16_t)magnitude;
 
     if (motor == MOTOR_SPEED_LEFT)
     {
@@ -131,7 +163,9 @@ void Motor_Stop_All(void)
     motor_last_pwm[3] = 0;
 }
 
-void Motor_SetCalibration(float left_scale, float right_scale, int16_t left_offset, int16_t right_offset)
+void Motor_SetCalibration(float left_scale, float right_scale,
+                          int16_t left_offset, int16_t right_offset,
+                          int16_t left_deadzone, int16_t right_deadzone)
 {
     if (left_scale < 0.1f) left_scale = 0.1f;
     if (left_scale > 2.0f) left_scale = 2.0f;
@@ -146,4 +180,16 @@ void Motor_SetCalibration(float left_scale, float right_scale, int16_t left_offs
     motor_cal.right_scale = right_scale;
     motor_cal.left_offset = left_offset;
     motor_cal.right_offset = right_offset;
+
+    /* 负数 = 保持当前值，方便上位机只改缩放 */
+    if (left_deadzone >= 0)
+    {
+        if (left_deadzone > 600) left_deadzone = 600;
+        motor_cal.left_deadzone = left_deadzone;
+    }
+    if (right_deadzone >= 0)
+    {
+        if (right_deadzone > 600) right_deadzone = 600;
+        motor_cal.right_deadzone = right_deadzone;
+    }
 }

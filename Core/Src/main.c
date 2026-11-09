@@ -172,7 +172,8 @@ static void Telemetry_SendData(void)
               "\"to\":%d,\"lw\":%d,\"rw\":%d,"
               "\"hk\":%ld,\"hi\":%ld,\"hd\":%ld,\"xk\":%ld,\"xi\":%ld,\"xd\":%ld,"
               "\"aiph\":%u,\"aiphn\":%u,\"ait\":%u,\"aitn\":%u,"
-              "\"mls\":%ld,\"mrs\":%ld,\"mlo\":%ld,\"mro\":%ld}\r\n",
+              "\"mls\":%ld,\"mrs\":%ld,\"mlo\":%ld,\"mro\":%ld,"
+              "\"mlz\":%ld,\"mrz\":%ld}\r\n",
               (unsigned long)seq++,
               (unsigned long)HAL_GetTick(),
               (long)ph_x100,
@@ -217,7 +218,9 @@ static void Telemetry_SendData(void)
               (long)(motor_cal.left_scale * 100.0f),
               (long)(motor_cal.right_scale * 100.0f),
               (long)motor_cal.left_offset,
-              (long)motor_cal.right_offset);
+              (long)motor_cal.right_offset,
+              (long)motor_cal.left_deadzone,
+              (long)motor_cal.right_deadzone);
 }
 /* USER CODE END 0 */
 
@@ -389,10 +392,12 @@ int main(void)
       Lora_MotorCalCmd_t cmd;
       if (Lora_GetPendingMotorCalCmd(&cmd))
       {
-        Motor_SetCalibration(cmd.ls, cmd.rs, cmd.lo, cmd.ro);
-        Lora_Printf("{\"t\":\"ack\",\"kind\":\"mcal\",\"ls\":%.2f,\"rs\":%.2f,\"lo\":%ld,\"ro\":%ld}\r\n",
+        Motor_SetCalibration(cmd.ls, cmd.rs, cmd.lo, cmd.ro, cmd.ldz, cmd.rdz);
+        Lora_Printf("{\"t\":\"ack\",\"kind\":\"mcal\",\"ls\":%.2f,\"rs\":%.2f,\"lo\":%ld,\"ro\":%ld,"
+                    "\"ldz\":%ld,\"rdz\":%ld}\r\n",
                      (double)motor_cal.left_scale, (double)motor_cal.right_scale,
-                     (long)motor_cal.left_offset, (long)motor_cal.right_offset);
+                     (long)motor_cal.left_offset, (long)motor_cal.right_offset,
+                     (long)motor_cal.left_deadzone, (long)motor_cal.right_deadzone);
       }
     }
 

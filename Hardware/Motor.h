@@ -38,10 +38,12 @@ typedef enum {
 } MotorId;
 
 typedef struct {
-    float left_scale;     // 左电机 PWM 缩放系数 (1.0 = 不缩放)
-    float right_scale;    // 右电机 PWM 缩放系数
-    int16_t left_offset;  // 左电机 PWM 偏移 (补偿死区)
-    int16_t right_offset; // 右电机 PWM 偏移
+    float left_scale;       // 左电机 PWM 缩放系数 (1.0 = 不缩放)
+    float right_scale;      // 右电机 PWM 缩放系数
+    int16_t left_offset;    // 左电机 PWM 微调偏移（仅在非零指令时生效）
+    int16_t right_offset;   // 右电机 PWM 微调偏移
+    int16_t left_deadzone;  // 左电机启动死区（PWM counts，0 = 不补偿）
+    int16_t right_deadzone; // 右电机启动死区
 } MotorCal_t;
 
 extern MotorCal_t motor_cal;
@@ -56,7 +58,13 @@ void Motor_Go_PWM(MotorId motor, int16_t pulse);
  */
 int16_t Motor_GetLastPwm(MotorId motor);
 void Motor_Stop_All(void);
-void Motor_SetCalibration(float left_scale, float right_scale, int16_t left_offset, int16_t right_offset);
+/**
+ * @brief 设置电机校准
+ * @note  deadzone 传负数表示"保持当前值"（上位机可以只改缩放/偏移）
+ */
+void Motor_SetCalibration(float left_scale, float right_scale,
+                          int16_t left_offset, int16_t right_offset,
+                          int16_t left_deadzone, int16_t right_deadzone);
 
 #ifdef __cplusplus
 }

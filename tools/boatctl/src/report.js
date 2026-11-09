@@ -124,7 +124,7 @@ function renderHtml(report) {
   // ① 主图：陀螺仪目标航向 vs 实际航向
   charts.push(lineChart({
     width: 900, height: 300,
-    title: '陀螺仪航向：目标（外环输出）vs 实际（IMU 测得）',
+    title: '外环（角度环）：目标航向 vs 陀螺仪实测航向',
     series: [
       { name: '目标航向', color: '#2f6fb3', points: points(s, 'targetYaw'), width: 2, dash: '6 4' },
       { name: '实际航向', color: '#2f8f5b', points: points(s, 'yaw'), width: 2.2 }
@@ -135,7 +135,7 @@ function renderHtml(report) {
   // ② 内环误差
   charts.push(lineChart({
     width: 900, height: 220,
-    title: '内环误差 = 目标航向 − 实际航向（阴影为 ±10° 目标带）',
+    title: '外环误差 = 目标航向 − 实测航向（阴影为 ±10° 目标带）',
     series: [{ name: '航向误差', color: '#b5651d', points: points(s, 'err'), width: 2 }],
     bands: [{ y0: -10, y1: 10, color: '#e8f5ee' }],
     hlines: [{ y: 10, color: '#9fc7ac', dash: '4 4' }, { y: -10, color: '#9fc7ac', dash: '4 4' }],
@@ -145,7 +145,7 @@ function renderHtml(report) {
   // ③ 控制输出
   charts.push(lineChart({
     width: 900, height: 240,
-    title: '控制输出：转向量 turn_output 与左右电机实际 PWM',
+    title: '内环（PWM 执行级）：PID 转向量 → 左右电机实际 PWM',
     series: [
       { name: '转向输出', color: '#7b5ea7', points: points(s, 'turn'), width: 2.2 },
       { name: '左 PWM', color: '#9aa7b1', points: points(s, 'leftPwm'), width: 1.2 },
@@ -163,8 +163,8 @@ function renderHtml(report) {
   }));
 
   const gainText = [];
-  if (report.gains.heading) gainText.push('航向 kp=' + report.gains.heading.kp + ' ki=' + report.gains.heading.ki + ' kd=' + report.gains.heading.kd);
-  if (report.gains.crosstrack) gainText.push('横向 kp=' + report.gains.crosstrack.kp + ' ki=' + report.gains.crosstrack.ki + ' kd=' + report.gains.crosstrack.kd);
+  if (report.gains.heading) gainText.push('外环(角度) kp=' + report.gains.heading.kp + ' ki=' + report.gains.heading.ki + ' kd=' + report.gains.heading.kd);
+  if (report.gains.crosstrack) gainText.push('横偏修正 kp=' + report.gains.crosstrack.kp + ' ki=' + report.gains.crosstrack.ki + ' kd=' + report.gains.crosstrack.kd);
 
   const diagHtml = (report.diagnosis || []).map((d) => {
     const cls = d.severity === 'fail' ? 'fail' : d.severity === 'warn' ? 'warn' : 'ok';
@@ -206,6 +206,18 @@ function renderHtml(report) {
     + ' · 停止原因：' + esc(report.run.stopReason || '—') + '</div>');
 
   if (gainText.length) html.push('<div class="sub" style="color:#2f6fb3">本次增益：' + esc(gainText.join('　|　')) + '</div>');
+
+  html.push('<section class="chart" style="padding:12px 16px">');
+  html.push('<div style="font-size:13px;font-weight:600;margin-bottom:6px">控制结构</div>');
+  html.push('<div style="font-size:12px;color:#555;line-height:1.9">');
+  html.push('① <b>横偏修正环</b>：横向偏差(米) → 目标航向修正(度)。距目标 10m 内会线性淡出，'
+    + '让船径直朝目标点而不是贴着航线绕过去。<br>');
+  html.push('② <b>外环（角度环，闭环）</b>：目标航向 − 陀螺仪实测航向 → PID → 转向量 turn_output。<br>');
+  html.push('③ <b>内环（PWM 执行级，开环）</b>：转向量 → 左右电机 PWM（含缩放、死区补偿、偏移）。<br>');
+  html.push('<span style="color:#a06a1a">注意：内环没有电机转速/电流反馈（无编码器），所以它是开环映射，不是 PID。');
+  html.push('执行级的非线性（死区、左右不对称、电池电压跌落）全部要由外环 PID 吸收，</span>');
+  html.push('<span style="color:#a06a1a">这也是小指令不转、一过阈值就猛冲的根源。标定 <code>mcal</code> 的 scale/deadzone 就是在修这一层。</span>');
+  html.push('</div></section>');
 
   html.push('<div class="cards">');
   html.push(card('±10° 内占比', t.pctWithin10 === undefined ? '—' : (t.pctWithin10 * 100).toFixed(0) + '%', '目标 ≥ 80%'));

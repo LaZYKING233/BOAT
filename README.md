@@ -134,6 +134,7 @@ node tools/boatctl/bin/boatctl.js selftest --open COM7 --out report.json
 | `xk`/`xi`/`xd` | 当前生效的外环增益（横向 kp/ki/kd） | ×1000 |
 | `aiph`/`aiphn`/`ait`/`aitn` | 边缘 AI：pH 相似度/是否正常、温度相似度/是否正常 | 0-100 / 0-1 |
 | `mls`/`mrs`/`mlo`/`mro` | 电机校准：左右缩放(×100)、左右偏移 | - |
+| `mlz`/`mrz` | 左右电机启动死区补偿（PWM counts） | - |
 
 导航状态 `ns`：0 待机 / 1 导航中 / 2 区域保持 / 3 GPS 丢失 / 4 越界归位。
 
@@ -145,12 +146,17 @@ node tools/boatctl/bin/boatctl.js selftest --open COM7 --out report.json
  "bclat":345001000,"bclon":1040001000,"blen":20,"bwid":10}
 {"t":"cmd","cmd":"stop"}      // stop / start / sensor / dtest
 {"t":"motor","l":50,"r":50}   // -100 ~ 100
-{"t":"mcal","ls":1.0,"rs":0.85,"lo":0,"ro":10}
+{"t":"mcal","ls":1.0,"rs":0.85,"lo":0,"ro":10,"ldz":80,"rdz":65}
 {"t":"pid","hkp":2.0,"hki":0.35,"hkd":0.25,"xkp":2.3,"xki":0.30,"xkd":0.12}
 ```
 
 `pid` 用于**运行时整定**，无需重新编译烧录；省略的字段保持原值。
 修改后积分/微分状态会清零，避免换参数瞬间的冲击。
+
+`mcal` 的 `ldz`/`rdz` 是左右电机**启动死区补偿**（PWM counts，0=不补偿），
+省略则保持当前值。死区补偿会把指令 1~100 线性映射到 `deadzone~999`，
+解决"小指令不转、一过阈值就猛冲"。**calibration 的 offset 现在只在非零指令时生效**，
+修掉了原先 speed=0 仍有 PWM 输出导致船慢慢蠕动的问题。
 
 `ar` 到达半径、`r` 保持半径、`rr` 漂移归位半径、`bm` 边界容差（米）。
 `bclat/bclon/blen/bwid` 为区域矩形，用于越界判定与归位。

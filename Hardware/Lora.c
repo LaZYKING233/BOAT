@@ -198,6 +198,9 @@ static void Lora_ProcessLine(const char *line)
         cmd.rs = Lora_ExtractFloat(line, "rs", 1.0f);
         cmd.lo = (int16_t)Lora_ExtractInt(line, "lo", 0);
         cmd.ro = (int16_t)Lora_ExtractInt(line, "ro", 0);
+        /* 缺省 -1 = 保持当前死区值，避免只改缩放时把死区清掉 */
+        cmd.ldz = (int16_t)Lora_ExtractInt(line, "ldz", -1);
+        cmd.rdz = (int16_t)Lora_ExtractInt(line, "rdz", -1);
         lora_pending_motorcal_cmd = cmd;
         lora_motorcal_cmd_ready = 1;
     }

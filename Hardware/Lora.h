@@ -135,6 +135,8 @@ typedef struct {
     float    rs;             /* right_scale */
     int16_t  lo;             /* left_offset */
     int16_t  ro;             /* right_offset */
+    int16_t  ldz;            /* left_deadzone，负数 = 保持当前值 */
+    int16_t  rdz;            /* right_deadzone，负数 = 保持当前值 */
 } Lora_MotorCalCmd_t;
 
 /**

@@ -251,15 +251,15 @@ function analyzeRun(samples, options = {}) {
   if (t.pctWithin10 === null) {
     // 数据不足，跳过
   } else if (t.pctWithin10 < 0.6) {
-    push('fail', '航向保持不达标',
+    push('fail', '外环跟踪不达标',
       `只有 ${round(t.pctWithin10 * 100, 0)}% 的时间航向误差在 ±10° 内（目标 ≥ 80%），平均 ${t.meanAbsErrDeg}°，P95 ${t.p95AbsErrDeg}°`,
       '先解决振荡/饱和，再谈跟踪精度。这两项没改善前调 ki 没有意义。');
   } else if (t.pctWithin10 < 0.8) {
-    push('warn', '航向保持勉强',
+    push('warn', '外环跟踪勉强',
       `${round(t.pctWithin10 * 100, 0)}% 时间在 ±10° 内，平均 ${t.meanAbsErrDeg}°`,
       '可接受但不够稳。优先看下面的饱和/振荡项。');
   } else {
-    push('ok', '航向保持良好',
+    push('ok', '外环跟踪良好',
       `${round(t.pctWithin10 * 100, 0)}% 时间在 ±10° 内，平均 ${t.meanAbsErrDeg}°，P95 ${t.p95AbsErrDeg}°`);
   }
 
@@ -348,8 +348,8 @@ function renderReport(report, { color = true, samples = null, plot = false } = {
   out.push('  ===== 导航实跑分析 =====');
   out.push('  帧: ' + report.run.totalFrames + ' 总 / ' + report.run.navFrames + ' 导航中 / ' + report.run.holdingFrames + ' 保持');
   if (report.run.durationS) out.push('  时长: ' + report.run.durationS + ' 秒');
-  if (report.gains) out.push('  航向增益: kp=' + report.gains.kp + ' ki=' + report.gains.ki + ' kd=' + report.gains.kd);
-  if (report.xgains) out.push('  横向增益: kp=' + report.xgains.kp + ' ki=' + report.xgains.ki + ' kd=' + report.xgains.kd);
+  if (report.gains) out.push('  外环(角度)增益: kp=' + report.gains.kp + ' ki=' + report.gains.ki + ' kd=' + report.gains.kd);
+  if (report.xgains) out.push('  横偏修正增益: kp=' + report.xgains.kp + ' ki=' + report.xgains.ki + ' kd=' + report.xgains.kd);
 
   if (!m.tracking) {
     out.push('');
@@ -363,13 +363,13 @@ function renderReport(report, { color = true, samples = null, plot = false } = {
   }
 
   out.push('');
-  out.push('  航向跟踪     平均 ' + m.tracking.meanAbsErrDeg + '°  P95 ' + m.tracking.p95AbsErrDeg
+  out.push('  外环跟踪     平均 ' + m.tracking.meanAbsErrDeg + '°  P95 ' + m.tracking.p95AbsErrDeg
     + '°  最大 ' + m.tracking.maxAbsErrDeg + '°'
     + '   |   ±10°内 ' + (m.tracking.pctWithin10 * 100).toFixed(0) + '%');
   out.push('  振荡         零穿 ' + m.oscillation.zeroCrossings + ' 次'
     + (m.oscillation.periodS ? '  周期 ' + m.oscillation.periodS + 's  摆幅 ' + m.oscillation.amplitudeDeg + '°' : '')
     + (m.oscillation.decaying ? '  (衰减中 ' + m.oscillation.earlyAmplitudeDeg + '°→' + m.oscillation.lateAmplitudeDeg + '°)' : ''));
-  out.push('  控制输出     平均 ' + m.control.meanAbsTurn + '  饱和 ' + (m.control.satRatio * 100).toFixed(0) + '%'
+  out.push('  内环输出     平均 ' + m.control.meanAbsTurn + '  饱和 ' + (m.control.satRatio * 100).toFixed(0) + '%'
     + '  最长饱和 ' + m.control.longestSaturationS + 's'
     + '   |   左/右 PWM 均值 ' + m.control.meanAbsLeftPwm + ' / ' + m.control.meanAbsRightPwm);
   out.push('  稳态(末25%)  有符号均值 ' + m.steady.signedMeanErrDeg + '°  绝对均值 ' + m.steady.absMeanErrDeg + '°  标准差 ' + m.steady.stdErrDeg + '°');
