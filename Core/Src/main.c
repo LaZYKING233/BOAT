@@ -167,7 +167,7 @@ static void Telemetry_SendData(void)
               "\"tc\":%ld,\"tv\":%u,"
               "\"fix\":%u,\"sat\":%u,\"lat\":%ld,\"lon\":%ld,"
               "\"iv\":%u,\"ir\":%ld,\"ip\":%ld,\"iy\":%ld,\"ib\":%lu,\"ia\":%lu,"
-              "\"gb\":%lu,\"gl\":%lu,"
+              "\"gb\":%lu,\"gl\":%lu,\"lr\":%lu,"
               "\"ns\":%u,\"nd\":%ld,\"nt\":%ld,\"bs\":%u,\"bd\":%ld,\"rs\":%u,\"rd\":%ld,\"xt\":%ld,\"ch\":%ld,"
               "\"to\":%d,\"lw\":%d,\"rw\":%d,"
               "\"hk\":%ld,\"hi\":%ld,\"hd\":%ld,\"xk\":%ld,\"xi\":%ld,\"xd\":%ld,"
@@ -194,6 +194,7 @@ static void Telemetry_SendData(void)
               (unsigned long)imu901_attitude_count,
               (unsigned long)gps_rx_count,
               (unsigned long)gps_sentence_count,
+              (unsigned long)lora_rx_bytes,
               (unsigned int)nav.state,
               (long)((nav.state != NAV_IDLE) ? (nav.distance * 100.0f) : 0.0f),
               (long)(nav.heading_error * 100.0f),
@@ -385,10 +386,15 @@ int main(void)
       if (Lora_GetPendingPidCmd(&cmd))
       {
         Navigation_SetPid(cmd.hkp, cmd.hki, cmd.hkd, cmd.xkp, cmd.xki, cmd.xkd);
-        Lora_Printf("{\"t\":\"ack\",\"kind\":\"pid\",\"hk\":%.3f,\"hi\":%.3f,\"hd\":%.3f,"
-                    "\"xk\":%.3f,\"xi\":%.3f,\"xd\":%.3f}\r\n",
-                    (double)heading_pid.kp, (double)heading_pid.ki, (double)heading_pid.kd,
-                    (double)crosstrack_pid.kp, (double)crosstrack_pid.ki, (double)crosstrack_pid.kd);
+        /* 增益用整数 ×1000 回显。newlib-nano 默认不链接浮点 printf，
+         * 原来的 %.3f 会输出空字符串（"hk":,），命令有没有生效完全看不出来。
+         * 与遥测里的 hk/hi/hd 保持同一种编码，也不引入浮点格式化开销。 */
+        Lora_Printf("{\"t\":\"ack\",\"kind\":\"pid\",\"hk\":%ld,\"hi\":%ld,\"hd\":%ld,"
+                    "\"xk\":%ld,\"xi\":%ld,\"xd\":%ld}\r\n",
+                    (long)(heading_pid.kp * 1000.0f), (long)(heading_pid.ki * 1000.0f),
+                    (long)(heading_pid.kd * 1000.0f),
+                    (long)(crosstrack_pid.kp * 1000.0f), (long)(crosstrack_pid.ki * 1000.0f),
+                    (long)(crosstrack_pid.kd * 1000.0f));
       }
     }
 
@@ -398,9 +404,10 @@ int main(void)
       if (Lora_GetPendingMotorCalCmd(&cmd))
       {
         Motor_SetCalibration(cmd.ls, cmd.rs, cmd.lo, cmd.ro, cmd.ldz, cmd.rdz);
-        Lora_Printf("{\"t\":\"ack\",\"kind\":\"mcal\",\"ls\":%.2f,\"rs\":%.2f,\"lo\":%ld,\"ro\":%ld,"
+        Lora_Printf("{\"t\":\"ack\",\"kind\":\"mcal\",\"ls\":%ld,\"rs\":%ld,\"lo\":%ld,\"ro\":%ld,"
                     "\"ldz\":%ld,\"rdz\":%ld}\r\n",
-                     (double)motor_cal.left_scale, (double)motor_cal.right_scale,
+                     (long)(motor_cal.left_scale * 100.0f),
+                     (long)(motor_cal.right_scale * 100.0f),
                      (long)motor_cal.left_offset, (long)motor_cal.right_offset,
                      (long)motor_cal.left_deadzone, (long)motor_cal.right_deadzone);
       }

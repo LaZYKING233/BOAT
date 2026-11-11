@@ -28,6 +28,10 @@ static Lora_PidCmd_t     lora_pending_pid_cmd = {0};
 static uint8_t           lora_pid_cmd_ready = 0;
 static uint16_t          lora_rx_count = 0;
 
+/* 累计收到的字节数。下行不工作时用它区分"物理上没收到"和"收到了但没解析出来"：
+ * 前者是接线/模块模式问题，后者是固件解析问题，处理方向完全相反。 */
+volatile uint32_t        lora_rx_bytes = 0;
+
 void Lora_Init(void)
 {
     
@@ -125,6 +129,76 @@ static float Lora_ExtractFloat(const char *json, const char *key, float def)
     return strtof(p, NULL);
 }
 
+/* 紧凑文本指令（JSON 太长，在丢字节的下行链路上基本传不过去）
+ *
+ *   G<纬度×1e6>,<经度×1e6>        例如 G34500100,10400010   -> 19 字符
+ *   P<hkp×1000>,<hki×1000>,<hkd×1000>
+ *
+ * 实测下行报文超过约 40 字节就开始丢字节，147 字节的 target 几乎必然被截断。
+ * 紧凑格式把关键命令压到 20 字节以内，显著提高一次送达率。
+ */
+static uint8_t Lora_ParseCompact(const char *line)
+{
+    char *p;
+    char *comma;
+
+    if (line[0] == 'G' || line[0] == 'g')
+    {
+        p = (char *)line + 1;
+        comma = strchr(p, ',');
+        if (!comma) return 0;
+
+        Lora_TargetCmd_t cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        cmd.valid = 1;
+
+        /* 上位机用 1e6 缩放（精度约 0.1m），固件内部统一按 1e7 使用 */
+        cmd.lat = (int32_t)(strtol(p, NULL, 10) * 10);
+        cmd.lon = (int32_t)(strtol(comma + 1, NULL, 10) * 10);
+
+        /* 紧凑格式不带半径，用演示默认值；需要精细控制时再用完整 JSON 下发 */
+        cmd.r  = 6;
+        cmd.ar = 2;
+        cmd.rr = 8;
+        cmd.bm = 4;
+
+        lora_pending_cmd = cmd;
+        lora_cmd_ready = 1;
+        return 1;
+    }
+
+    if (line[0] == 'P' || line[0] == 'p')
+    {
+        p = (char *)line + 1;
+        comma = strchr(p, ',');
+        if (!comma) return 0;
+
+        Lora_PidCmd_t cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        cmd.valid = 1;
+
+        cmd.hkp = (float)strtol(p, NULL, 10) / 1000.0f;
+        p = comma + 1;
+        comma = strchr(p, ',');
+        if (!comma) return 0;
+        cmd.hki = (float)strtol(p, NULL, 10) / 1000.0f;
+        cmd.hkd = (float)strtol(comma + 1, NULL, 10) / 1000.0f;
+
+        /* 紧凑格式只管航向三项。横向增益必须显式设为 -1（= 不修改），
+         * 否则 memset 出来的 0 会被 Navigation_SetPid 当作"设为 0"，
+         * 把横偏环的 ki/kd 清掉。 */
+        cmd.xkp = -1.0f;
+        cmd.xki = -1.0f;
+        cmd.xkd = -1.0f;
+
+        lora_pending_pid_cmd = cmd;
+        lora_pid_cmd_ready = 1;
+        return 1;
+    }
+
+    return 0;
+}
+
 /* 收到完整一行后解析 */
 static void Lora_ProcessLine(const char *line)
 {
@@ -135,6 +209,9 @@ static void Lora_ProcessLine(const char *line)
     uint16_t json_len;
 
     lora_rx_count++;
+
+    /* 先试紧凑文本格式 */
+    if (Lora_ParseCompact(line)) return;
 
     json_start = strchr(line, '{');
     if (!json_start) return;
@@ -226,6 +303,8 @@ static void Lora_ProcessLine(const char *line)
 
 void Lora_ProcessByte(uint8_t byte)
 {
+    lora_rx_bytes++;
+
     if (byte == '\n' || lora_rx_len >= LORA_LINE_MAX - 1)
     {
         if (lora_rx_len > 0)

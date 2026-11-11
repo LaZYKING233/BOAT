@@ -34,6 +34,7 @@ class BoatClient extends EventEmitter {
     this._ws = null;
     this._wsOpen = false;
     this._lastSeq = null;
+    this._lastAck = null;
     this._connectedAt = null;
     this._waiters = new Set();
   }
@@ -161,6 +162,17 @@ class BoatClient extends EventEmitter {
       case 'serial-message': {
         if (msg.status) this.status = { ...(this.status || {}), ...msg.status };
         if (msg.log) this._pushLog(msg.log);
+
+        /* MCU 收到下行命令会回一条 {"t":"ack","kind":...}。
+         * 可靠下发靠它判断是否真的生效——LoRa 下行有字节丢失，
+         * 没收到 ack 就意味着这条命令大概率被截断了。 */
+        if (msg.entry && msg.entry.type === 'ack') {
+          try {
+            const ack = JSON.parse(msg.entry.raw);
+            this._lastAck = { ...ack, rxAt: Date.now() };
+            this.emit('ack', this._lastAck);
+          } catch { /* 半截的 ack，忽略 */ }
+        }
         const raw = msg.latestData;
         if (raw && raw.t === 'data' && raw.seq !== this._lastSeq) {
           this._lastSeq = raw.seq;
@@ -321,6 +333,42 @@ class BoatClient extends EventEmitter {
   waitFresh(timeoutMs = 5000) {
     const since = Date.now();
     return this.waitFor((t) => t.rxAt > since, timeoutMs);
+  }
+
+  /**
+   * 可靠下行：发出去，等 MCU 的 ack，没等到就重发。
+   *
+   * LoRa 下行存在字节丢失（实测报文越长越容易截断，150 字节的 target 几乎必然失败），
+   * 逐字节的重传不现实，只能整包重发。短命令通常一次就成，
+   * 长命令靠重试也能在几次内通过。
+   *
+   * @param {object} obj        要发送的 JSON
+   * @param {object} opts
+   * @param {string} opts.expectAck  ack 里的 kind（如 'pid' / 'mcal' / 'target'）
+   * @param {number} opts.retries    最多尝试次数，默认 6
+   * @param {number} opts.perTryMs   每次等待 ack 的时间，默认 2500
+   * @returns {Promise<{ok:boolean, attempts:number, ack:object|null}>}
+   */
+  async sendReliable(obj, { expectAck = null, retries = 6, perTryMs = 2500 } = {}) {
+    const kind = expectAck || obj.t;
+    let lastAck = null;
+
+    for (let attempt = 1; attempt <= retries; attempt += 1) {
+      const sentAt = Date.now();
+      await this.send(obj);
+
+      const deadline = Date.now() + perTryMs;
+      while (Date.now() < deadline) {
+        const ack = this._lastAck;
+        if (ack && ack.rxAt >= sentAt && ack.kind === kind) {
+          return { ok: true, attempts: attempt, ack };
+        }
+        await new Promise((r) => setTimeout(r, 80));
+      }
+      lastAck = this._lastAck;
+    }
+
+    return { ok: false, attempts: retries, ack: lastAck };
   }
 
   /** 这段时间内收到的新帧（不含已有的） */

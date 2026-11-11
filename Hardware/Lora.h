@@ -156,6 +156,9 @@ typedef struct {
  * @brief  启动 LoRa USART3 中断接收（单字节）
  * @note   在 Lora_Init() 之后、主循环之前调用一次
  */
+/** 累计收到的字节数（诊断用：判断下行数据是否真的到达了 MCU） */
+extern volatile uint32_t lora_rx_bytes;
+
 void Lora_StartReceive(void);
 
 /**
