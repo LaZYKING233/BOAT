@@ -53,12 +53,25 @@ function analyzeRun(samples, options = {}) {
   };
 
   if (navOnly.length < 5) {
-    report.diagnosis.push({
-      severity: 'fail',
-      title: '导航数据不足',
-      detail: `只有 ${navOnly.length} 帧处于"导航中"(ns=1)，至少需要 5 帧`,
-      action: '航程太短无法评估。把目标设远一些（≥15m），或降低 --arrive 让船多跑一段。'
-    });
+    /* 分清"没定位"和"航程太短"——两者处理方式完全不同 */
+    const noGps = all.filter((s) => s.navState === 3).length;
+    const noGpsDominant = noGps > all.length * 0.5;
+
+    if (noGpsDominant) {
+      report.diagnosis.push({
+        severity: 'fail',
+        title: 'GPS 未定位，船无法进入导航',
+        detail: `${noGps}/${all.length} 帧处于"GPS 丢失"(ns=3)。固件在无定位时会停船并拒绝导航任务。`,
+        action: '到室外开阔处等 fix>0 且卫星数 >5。室内无法验证导航，这不是参数问题。'
+      });
+    } else {
+      report.diagnosis.push({
+        severity: 'fail',
+        title: '导航数据不足',
+        detail: `只有 ${navOnly.length} 帧处于"导航中"(ns=1)，至少需要 5 帧`,
+        action: '航程太短无法评估。把目标设远一些（≥15m），或降低 --arrive 让船多跑一段。'
+      });
+    }
     return report;
   }
 

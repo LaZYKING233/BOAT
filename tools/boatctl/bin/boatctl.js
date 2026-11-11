@@ -327,6 +327,31 @@ function parseLatLon(text) {
   return { lat: parts[0], lon: parts[1] };
 }
 
+/**
+ * 下发目标点（带船端确认）。
+ *
+ * 优先走 /api/targets/point：服务端会等 target ack，没等到就重发。
+ * 直接写串口只说明字节发出去了，在半双工 LoRa 上这不等于船收到。
+ * 接口不存在时（对着模拟器）回退到原始发送。
+ */
+async function dispatchTarget(client, lat, lon, opts = {}) {
+  try {
+    const res = await client.request('POST', '/api/targets/point', {
+      latitude: lat,
+      longitude: lon,
+      arrive: opts.arrive,
+      hold: opts.hold
+    });
+    return { confirmed: true, ack: res && res.ack };
+  } catch (error) {
+    if (error.statusCode === 404) {
+      await client.goto(lat, lon, opts);
+      return { confirmed: false, ack: null };
+    }
+    throw error;
+  }
+}
+
 /** 需要时自动连串口，让整条流程真正无人值守 */
 async function ensureSerial(client, flags) {
   if (!flags.open) return;
@@ -341,12 +366,14 @@ async function cmdGoto(client, positional, flags) {
   await client.connect();
   await ensureSerial(client, flags);
   if (!client.isConnected()) { console.error('串口未连接，请先在 WebUI 里连接 LoRa 接收端，或加 --open COMx'); return 1; }
-  await client.goto(ll.lat, ll.lon, {
+  const res = await dispatchTarget(client, ll.lat, ll.lon, {
     arrive: Number(flags.arrive) || 2,
     hold: Number(flags.hold) || 6,
     drift: Number(flags.drift) || 8
   });
-  console.log(`已下发目标: ${ll.lat}, ${ll.lon}  (到达 ${Number(flags.arrive) || 2}m / 保持 ${Number(flags.hold) || 6}m)`);
+  console.log(res.confirmed
+    ? `目标已送达船端: ${ll.lat}, ${ll.lon}`
+    : `目标已发送（未确认）: ${ll.lat}, ${ll.lon}`);
   return 0;
 }
 
@@ -378,12 +405,15 @@ async function cmdNavrun(client, flags) {
   const ll = parseLatLon(flags.to);
   if (ll) {
     meta.target = ll;
-    await client.goto(ll.lat, ll.lon, {
+    const res = await dispatchTarget(client, ll.lat, ll.lon, {
       arrive: meta.arriveRadiusM,
       hold: meta.holdRadiusM,
       drift: Number(flags.drift) || 8
     });
-    console.log(`目标已下发: ${ll.lat}, ${ll.lon}`);
+    meta.targetConfirmed = res.confirmed;
+    console.log(res.confirmed
+      ? `目标已送达船端: ${ll.lat}, ${ll.lon}`
+      : `目标已发送（未确认）: ${ll.lat}, ${ll.lon}`);
   } else {
     console.log('未指定 --to，假设船已经在导航中');
   }
