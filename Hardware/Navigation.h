@@ -15,6 +15,17 @@ extern "C" {
 #define NAV_HOLD_SPEED      30      // 保持/修正速度(PWM 0-100)
 #define NAV_BOUNDARY_MARGIN 2.0f    // 默认边界容差(米)
 
+/* 定点保持参数
+ * 死区内停桨（避免电机反复启停），死区外按距离线性给油门，越远越快，
+ * 到 drift_radius 给满。船会一直待在目标点附近，而不是"漂到 drift_radius
+ * 才救一次、然后停在边界上"。 */
+#define NAV_HOLD_DEADBAND_MIN  1.0f   // 保持死区下限(米)，实际取 max(到达半径, 此值)
+#define NAV_HOLD_ARM_RATIO     1.5f   // 启动修正的距离 = 死区 × 此系数（迟滞，防抖）
+#define NAV_HOLD_MIN_SPEED     18     // 修正时的最小油门(PWM)
+#define NAV_HOLD_MAX_SPEED     80     // 漂移半径处给到的最大修正油门(PWM)
+                                      // 必须明显大于典型风漂所需的推力，
+                                      // 否则会"一直在修正、一直被冲走"
+
 // 导航状态
 typedef enum
 {
@@ -83,6 +94,8 @@ typedef struct
     NavReturnState_t return_state;
     float boundary_distance_m;   // 正数=边界内最近距离，负数=越界距离
     float return_distance_m;     // 越界归位点距离(米)
+
+    uint8_t hold_active;   // 定点保持是否正在修正（迟滞用）
 
     uint8_t leg_valid;
     float start_lat;

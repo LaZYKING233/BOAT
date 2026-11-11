@@ -201,6 +201,7 @@ void Navigation_Init(void)
     nav.boundary_margin_m = NAV_BOUNDARY_MARGIN;
     nav.boundary_state = NAV_BOUNDARY_DISABLED;
     nav.return_state = NAV_RETURN_NONE;
+    nav.hold_active = 0;
     nav.boundary_distance_m = 0;
     nav.return_distance_m = 0;
     Navigation_ResetLeg();
@@ -435,7 +436,6 @@ void Navigation_Update(void)
     uint32_t now_tick;
     float dt_s;
     float current_lat, current_lon, current_yaw, desired_heading;
-    NavState_t resume_state;
 
     /* 真实时间步长：PID 的积分/微分都依赖它。
      * 首帧按 50ms 估；即使中间被别的任务拖慢，dt 也会在 PID 内部钳位。 */
@@ -497,6 +497,7 @@ void Navigation_Update(void)
         if (nav.distance < nav.arrive_radius_m)
         {
             nav.state = NAV_HOLDING;
+            nav.hold_active = 0;
             Motor_Stop_All();
             return;
         }
@@ -506,17 +507,58 @@ void Navigation_Update(void)
     }
     else if (nav.state == NAV_HOLDING)
     {
-        // 区域保持：如果漂移超出保持半径，修正回目标
-        if (nav.distance > nav.drift_radius_m)
+        /* 定点保持：主动把船按在目标点上。
+         *
+         * 旧实现只在距离 > drift_radius(8m) 时才动，一进 8m 就停桨，
+         * 于是船会稳定停在 8 米开外 —— 就是"漂流瓶"。
+         *
+         * 现在：死区内停桨；死区外按距离线性给油门，越远越快，到
+         * drift_radius 给满。用 hold_active 做迟滞，避免在死区边界
+         * 反复启停电机。 */
+        float deadband = (nav.arrive_radius_m > NAV_HOLD_DEADBAND_MIN)
+                       ? nav.arrive_radius_m : NAV_HOLD_DEADBAND_MIN;
+        float arm = deadband * NAV_HOLD_ARM_RATIO;
+
+        if (!nav.hold_active && nav.distance > arm)
         {
-            resume_state = nav.state;
-            nav.state = NAV_NAVIGATING;
-            Navigation_DriveToPoint(current_lat, current_lon, current_yaw, nav.target_lat, nav.target_lon, NAV_HOLD_SPEED, dt_s);
-            nav.state = resume_state;
+            nav.hold_active = 1;
+        }
+        else if (nav.hold_active && nav.distance <= deadband)
+        {
+            nav.hold_active = 0;
+        }
+
+        if (nav.hold_active)
+        {
+            /* 油门斜坡：死区 -> 漂移半径之间，从最小油门线性升到最大修正油门。
+             *
+             * 上限必须够大：NAV_HOLD_SPEED(30) 大约只对应 0.18 m/s，
+             * 比常见风漂/水流还小，结果是"一直在修正、一直被冲走"。
+             *
+             * 数值仿真（0.35/0.25/0.15/0.05 m/s 四档水流）：
+             *   上限 30 -> 40m / 7.4m / 2.7m
+             *   上限 60 -> 10.4m / 4.3m / 2.7m
+             *   上限 80 ->  5.9m / 4.3m / 2.7m   <- 采用
+             * 弱流下几档没有区别，强流下 80 明显更稳。 */
+            float span = nav.drift_radius_m - deadband;
+            float ratio;
+            int16_t speed;
+
+            if (span < 0.5f) span = 0.5f;
+
+            ratio = (nav.distance - deadband) / span;
+            ratio = Navigation_ClampFloat(ratio, 0.0f, 1.0f);
+
+            speed = (int16_t)((float)NAV_HOLD_MIN_SPEED
+                            + ratio * (float)(NAV_HOLD_MAX_SPEED - NAV_HOLD_MIN_SPEED));
+
+            /* 始终朝目标点走，用航向 PID 稳住船头 */
+            Navigation_DriveHeading(
+                Navigation_CalcBearing(current_lat, current_lon, nav.target_lat, nav.target_lon),
+                current_yaw, speed, dt_s);
         }
         else
         {
-            // 在保持半径内，停止电机
             Motor_Stop_All();
             nav.turn_output = 0;
             nav.speed_output = 0;
