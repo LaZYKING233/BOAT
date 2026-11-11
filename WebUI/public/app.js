@@ -749,6 +749,21 @@ function renderGpsTest() {
 }
 
 function renderSettings() {
+  /* 把固件里实际生效的电机校准同步到输入框。
+   * 不同步的话输入框一直是空的，用户点一次"发送校准参数"就会
+   * 把实测标定值（ls=0.90 / 死区 300）覆盖成默认值。 */
+  const live = state.latestData;
+  if (live) {
+    const syncCal = (id, value) => {
+      const el = $(id);
+      if (el && document.activeElement !== el) el.value = value;
+    };
+    if (live.mls !== undefined) syncCal('calLeftScale', (live.mls / 100).toFixed(2));
+    if (live.mrs !== undefined) syncCal('calRightScale', (live.mrs / 100).toFixed(2));
+    if (live.mlo !== undefined) syncCal('calLeftOffset', live.mlo);
+    if (live.mro !== undefined) syncCal('calRightOffset', live.mro);
+  }
+
   const config = state.sampling.config || {};
   const pairs = [['arrivalRadiusInput', config.arrivalRadiusM], ['fallbackRadiusInput', config.fallbackRadiusM], ['boundaryMarginInput', config.boundaryMarginM], ['returnRadiusInput', config.returnRadiusM], ['fallbackAfterInput', config.fallbackAfterMs == null ? '' : config.fallbackAfterMs / 1000], ['targetTimeoutInput', config.targetTimeoutMs == null ? '' : config.targetTimeoutMs / 60000], ['stabilizationInput', config.stabilizationMs == null ? '' : config.stabilizationMs / 1000], ['sampleIntervalInput', config.sampleIntervalMs == null ? '' : config.sampleIntervalMs / 1000], ['sampleDurationInput', config.sampleDurationMs == null ? '' : config.sampleDurationMs / 60000]];
   if (!state.formDirty.sampling) for (const [id, value] of pairs) $(id).value = value ?? '';
@@ -783,7 +798,32 @@ async function clearGpsTest() { const response = await api('/api/gps-test/clear'
 async function serialSendObject(object) { if (!state.status.connected) throw new Error('串口未连接'); await api('/api/serial/send', { method: 'POST', body: JSON.stringify({ message: JSON.stringify(object), appendNewline: true, broadcast: false }) }); toast('指令已发送；未确认船体物理执行'); }
 async function sendCommand(command) { await serialSendObject({ t: 'cmd', cmd: command }); }
 async function sendMotor(left, right) { await serialSendObject({ t: 'motor', l: Math.round(clamp(left, -100, 100)), r: Math.round(clamp(right, -100, 100)) }); }
-async function sendCalibration() { await serialSendObject({ t: 'mcal', ls: +clamp($('calLeftScale').value, 0, 2).toFixed(2), rs: +clamp($('calRightScale').value, 0, 2).toFixed(2), lo: Math.round(clamp($('calLeftOffset').value, -200, 200)), ro: Math.round(clamp($('calRightOffset').value, -200, 200)) }); }
+/**
+ * 下发电机校准。
+ *
+ * 原来的实现直接 clamp 输入框的值，而输入框初始为空 ——
+ * Number('') || 0 得到 0，一次误点就会把左右缩放都写成 0（电机彻底不动）。
+ * 现在：空值/非法值回落到当前遥测里的实际值，不会把已标定的参数抹掉。
+ */
+async function sendCalibration() {
+  const live = state.latestData || {};
+  const readNum = (id, fallback, min, max) => {
+    const raw = $(id).value;
+    const n = Number(raw);
+    if (raw === '' || !Number.isFinite(n)) return fallback;
+    return Math.min(max, Math.max(min, n));
+  };
+
+  const body = {
+    t: 'mcal',
+    ls: +readNum('calLeftScale', (live.mls ?? 100) / 100, 0, 2).toFixed(2),
+    rs: +readNum('calRightScale', (live.mrs ?? 100) / 100, 0, 2).toFixed(2),
+    lo: Math.round(readNum('calLeftOffset', live.mlo ?? 0, -200, 200)),
+    ro: Math.round(readNum('calRightOffset', live.mro ?? 0, -200, 200))
+  };
+
+  await serialSendObject(body);
+}
 function isFlatObject(value) { return value && typeof value === 'object' && !Array.isArray(value) && Object.values(value).every(item => item === null || ['string','number','boolean'].includes(typeof item)); }
 
 async function startZoneInspection() {
