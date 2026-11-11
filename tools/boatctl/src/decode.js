@@ -80,6 +80,12 @@ function decodeTelemetry(raw, rxAt) {
     crosstrackGains: { kp: div(raw.xk, 1000), ki: div(raw.xi, 1000), kd: div(raw.xd, 1000) },
 
     // ---- 边缘 AI ----
+    // 返回码 0 = OK，-1 = 尚未调用。用来区分"模型没初始化成功"
+    // 与"输入偏离训练分布"——两者处理方式完全相反。
+    aiPhInitState: num(raw.api),
+    aiPhDetectState: num(raw.apd),
+    aiTempInitState: num(raw.ati),
+    aiTempDetectState: num(raw.atd),
     aiPhSimilarity: num(raw.aiph),
     aiPhNormal: flag(raw.aiphn),
     aiTempSimilarity: num(raw.ait),

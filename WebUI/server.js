@@ -87,6 +87,12 @@ let llmConfig = { ...DEFAULT_LLM_CONFIG };
 const riskAnalysisCache = {};  // { zoneId: { result, timestamp } }
 const RISK_CACHE_TTL_MS = 5 * 60 * 1000;  // 5 分钟缓存
 
+/* 端侧 AI 是否参与风险判定。
+ * 默认关闭：模型训练于 2026-06，与当前探头/环境不匹配（实测相似度 0 / 52），
+ * 让它一票否决会把正常数据全标成"需复测"。在 NanoEdge Studio 里用现场数据
+ * 重新训练并验证相似度稳定后，用 BOAT_AI_GATE=1 打开。 */
+const aiGate = process.env.BOAT_AI_GATE === '1';
+
 function getAnthropicToken() {
   return process.env.ANTHROPIC_AUTH_TOKEN || process.env.ANTHROPIC_API_KEY || '';
 }
@@ -1243,9 +1249,28 @@ function normalizeTelemetrySample(payload, options) {
     turbidityStatus: payload.tbv ?? null,
     temperatureValid: Number(payload.tv) === 1,
   };
+  /* NanoEdge 返回码 0 = OK。固件已确认两个模型 init / detect 都成功，
+   * 但相似度只有 0 / 52 —— 模型是 2026-06 训练的，训练域与当前探头状态不匹配，
+   * 此时它给出的"异常"没有意义。于是：
+   *   - 相似度照常上报，界面上能看到模型确实在跑；
+   *   - 是否让 AI 参与风险判定由 aiGate 控制，默认关闭（环境变量 BOAT_AI_GATE=1 开启）；
+   *   - 若检测调用本身失败（apd/atd != 0），则不采信该结果。
+   * 否则每条样本都会被标成"需复测"，把正常数据也污染掉。 */
+  const aiDetectOk = (code) => code === undefined || code === null || Number(code) === 0;
+  const phDetectOk = aiDetectOk(payload.apd);
+  const tempDetectOk = aiDetectOk(payload.atd);
+
   const edgeAi = {
-    phNormal: payload.aiphn === undefined || payload.aiphn === null ? null : Number(payload.aiphn) === 1,
-    temperatureNormal: payload.aitn === undefined || payload.aitn === null ? null : Number(payload.aitn) === 1,
+    phSimilarity: payload.aiph ?? null,
+    temperatureSimilarity: payload.ait ?? null,
+    phDetectOk,
+    temperatureDetectOk: tempDetectOk,
+    phNormal: !aiGate || !phDetectOk || payload.aiphn === undefined || payload.aiphn === null
+      ? null
+      : Number(payload.aiphn) === 1,
+    temperatureNormal: !aiGate || !tempDetectOk || payload.aitn === undefined || payload.aitn === null
+      ? null
+      : Number(payload.aitn) === 1,
   };
 
   return {
@@ -2018,6 +2043,42 @@ initializeStorage();
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, status: getSerialStatus() });
 });
+
+/* ---- 台架注入（仅 BOAT_SIM=1 时挂载）--------------------------------
+ * 没有硬件时，把一帧遥测按"从串口收到"的同一条路径灌进来，
+ * 用来验证采样状态机、区域归属、风险分析这些后端逻辑。
+ * 默认关闭，正式运行时这个路由根本不存在。 */
+if (process.env.BOAT_SIM === '1') {
+  app.post('/api/_bench/inject', (req, res) => {
+    const payload = req.body && req.body.payload;
+    if (!payload || payload.t !== 'data') {
+      res.status(400).json({ message: '需要 { payload: { t:"data", ... } }' });
+      return;
+    }
+    const receivedAt = nowIso();
+    state.lastMessageAt = receivedAt;
+    applyDecodedPayload(payload, receivedAt);
+    broadcast({
+      kind: 'serial-message',
+      status: getSerialStatus(),
+      latestBoot: state.latestBoot,
+      latestData: state.latestData,
+      latestDataReceivedAt: state.latestDataReceivedAt,
+      entry: {
+        id: ++entryId,
+        timestamp: receivedAt,
+        type: 'data',
+        seq: payload.seq,
+        summary: 'bench',
+        raw: JSON.stringify(payload),
+        payload,
+      },
+      log: addLog('RX', JSON.stringify(payload)),
+    });
+    res.json({ ok: true, sampling: state.sampling.status });
+  });
+  console.log('[bench] 注入接口已启用: POST /api/_bench/inject');
+}
 
 app.get('/api/status', (_req, res) => {
   res.json(getStatusPayload());

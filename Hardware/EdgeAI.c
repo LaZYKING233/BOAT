@@ -36,6 +36,11 @@ void EdgeAI_Init(void)
   edge_ai_status.temperature_similarity = 0U;
   edge_ai_status.temperature_normal = 0U;
   edge_ai_status.initialized = (ph_initialized && temperature_initialized) ? 1U : 0U;
+
+  edge_ai_status.ph_init_state = (int8_t)ph_state;
+  edge_ai_status.temperature_init_state = (int8_t)temperature_state;
+  edge_ai_status.ph_detect_state = -1;          /* -1 = 尚未调用 */
+  edge_ai_status.temperature_detect_state = -1;
 }
 
 void EdgeAI_UpdatePh(int32_t ph_x100, uint32_t ph_raw, uint32_t ph_mv)
@@ -63,10 +68,14 @@ void EdgeAI_UpdatePh(int32_t ph_x100, uint32_t ph_raw, uint32_t ph_mv)
   input_signal[3] = ph_delta;
   input_signal[4] = mv_delta;
 
-  if (ph_neai_anomalydetection_detect(input_signal, &similarity) == PH_NEAI_OK)
   {
-    edge_ai_status.ph_similarity = similarity;
-    edge_ai_status.ph_normal = (similarity >= EDGE_AI_PH_NORMAL_THRESHOLD) ? 1U : 0U;
+    ph_neai_state_t st = ph_neai_anomalydetection_detect(input_signal, &similarity);
+    edge_ai_status.ph_detect_state = (int8_t)st;
+    if (st == PH_NEAI_OK)
+    {
+      edge_ai_status.ph_similarity = similarity;
+      edge_ai_status.ph_normal = (similarity >= EDGE_AI_PH_NORMAL_THRESHOLD) ? 1U : 0U;
+    }
   }
 
   previous_ph = ph;
@@ -93,10 +102,14 @@ void EdgeAI_UpdateTemperature(int32_t temp_x100, uint8_t temp_valid)
   input_signal[1] = (float)temp_valid;
   input_signal[2] = temperature_delta;
 
-  if (temperature_neai_anomalydetection_detect(input_signal, &similarity) == TEMPERATURE_NEAI_OK)
   {
-    edge_ai_status.temperature_similarity = similarity;
-    edge_ai_status.temperature_normal = (similarity >= EDGE_AI_TEMPERATURE_NORMAL_THRESHOLD) ? 1U : 0U;
+    temperature_neai_state_t st = temperature_neai_anomalydetection_detect(input_signal, &similarity);
+    edge_ai_status.temperature_detect_state = (int8_t)st;
+    if (st == TEMPERATURE_NEAI_OK)
+    {
+      edge_ai_status.temperature_similarity = similarity;
+      edge_ai_status.temperature_normal = (similarity >= EDGE_AI_TEMPERATURE_NORMAL_THRESHOLD) ? 1U : 0U;
+    }
   }
 
   previous_temperature = temperature;

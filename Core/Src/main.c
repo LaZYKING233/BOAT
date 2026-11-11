@@ -172,6 +172,7 @@ static void Telemetry_SendData(void)
               "\"to\":%d,\"lw\":%d,\"rw\":%d,"
               "\"hk\":%ld,\"hi\":%ld,\"hd\":%ld,\"xk\":%ld,\"xi\":%ld,\"xd\":%ld,"
               "\"aiph\":%u,\"aiphn\":%u,\"ait\":%u,\"aitn\":%u,"
+              "\"api\":%d,\"apd\":%d,\"ati\":%d,\"atd\":%d,"
               "\"mls\":%ld,\"mrs\":%ld,\"mlo\":%ld,\"mro\":%ld,"
               "\"mlz\":%ld,\"mrz\":%ld}\r\n",
               (unsigned long)seq++,
@@ -215,6 +216,10 @@ static void Telemetry_SendData(void)
               ai_status.ph_normal,
               ai_status.temperature_similarity,
               ai_status.temperature_normal,
+              (int)ai_status.ph_init_state,
+              (int)ai_status.ph_detect_state,
+              (int)ai_status.temperature_init_state,
+              (int)ai_status.temperature_detect_state,
               (long)(motor_cal.left_scale * 100.0f),
               (long)(motor_cal.right_scale * 100.0f),
               (long)motor_cal.left_offset,
