@@ -2210,6 +2210,63 @@ app.post('/api/zones/:id/recover', (req, res) => {
   res.json({ ok: true, zone, zones: visibleZones(true) });
 });
 
+/**
+ * 手动地图选点下发。
+ *
+ * 与 /api/targets/zone 的区别：不启动采样任务，纯粹把船导向一个坐标，
+ * 用于演示"点地图 -> 船开过去"。
+ *
+ * 关键点：必须等船回 target ack 才算送达。writeSerialMessage 成功只说明
+ * 字节写进了 PC 的串口，在半双工 LoRa 链路上这远远不够。
+ */
+app.post('/api/targets/point', async (req, res) => {
+  try {
+    const latitude = Number(req.body.latitude);
+    const longitude = Number(req.body.longitude);
+
+    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
+      res.status(400).json({ message: '纬度必须在 -90 到 90 之间' });
+      return;
+    }
+    if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+      res.status(400).json({ message: '经度必须在 -180 到 180 之间' });
+      return;
+    }
+
+    const config = state.sampling.config;
+    const payload = {
+      t: 'target',
+      lat: Math.round(latitude * 10000000),
+      lon: Math.round(longitude * 10000000),
+      r: config.fallbackRadiusM,
+      ar: config.arrivalRadiusM,
+      rr: config.returnRadiusM || config.fallbackRadiusM,
+    };
+
+    const RETRIES = 3;
+    let acked = null;
+    for (let attempt = 1; attempt <= RETRIES && !acked; attempt += 1) {
+      await writeSerialMessage(JSON.stringify(payload), { appendNewline: true, broadcast: false });
+      acked = await waitForAck(
+        (a) => a.kind === 'target' && Number(a.lat) === payload.lat && Number(a.lon) === payload.lon,
+        4000
+      );
+    }
+
+    if (!acked) {
+      res.status(504).json({
+        message: `目标下发 ${RETRIES} 次均未收到船端确认，请检查 LoRa 链路后重试`,
+        payload,
+      });
+      return;
+    }
+
+    res.json({ ok: true, payload, ack: acked });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
 app.get('/api/samples', (req, res) => {
   const limit = Math.max(1, Math.min(Number(req.query.limit) || STATUS_SAMPLE_LIMIT, 5000));
   let samples = visibleSamples(req.query.includeDeleted === '1');

@@ -17,7 +17,7 @@ const state = {
   buffers: { ph: [], temp: [], turb: [] },
   aiChat: { messagesByZone: {}, loading: false },
   formDirty: { region: false, sampling: false, llm: false },
-  map: { instance: null, tileLayer: null, tileMode: 'standard', boatMarker: null, targetMarker: null, zoneLayers: {}, pointMarkers: [], autoCentered: false },
+  map: { instance: null, tileLayer: null, tileMode: 'standard', boatMarker: null, targetMarker: null, zoneLayers: {}, pointMarkers: [], autoCentered: false, fittedToZones: false },
   regionMap: { instance: null, tileLayer: null, draftLayer: null, previewLayer: null, contextLayers: {}, drawing: false, drawStart: null, resetForm: null, focusPending: false },
   gpsTest: { connected: false, portPath: null, baudRate: null, partialBytes: 0, lastSentenceAt: null, sentenceCount: 0, byteCount: 0, checksumErrors: 0, latest: null, lines: [], track: [] },
   gpsTestMap: { instance: null, tileLayer: null, marker: null, trackLine: null, autoCentered: false },
@@ -234,9 +234,10 @@ function renderKpis() {
   $('turbState').textContent = turb == null ? '等待' : !thresholds ? '无阈值' : turb > thresholds.turbidityMax ? '超出' : '范围内';
   const ns = data?.ns;
   $('navTrust').textContent = navStateText(ns); $('navTrust').className = `trust ${ns === 3 ? 'danger' : ns === 4 ? 'warning' : ns === 1 || ns === 2 ? 'normal' : 'unknown'}`;
-  $('distanceValue').textContent = data?.nd != null && Number(ns) > 0 ? scaled(data.nd, 100) : '—';
+  const navActive = Number(ns) > 0 && Number(ns) !== 3;   /* 3 = GPS 丢失，此时 nd/nt 无意义 */
+  $('distanceValue').textContent = data?.nd != null && navActive ? scaled(data.nd, 100) : '—';
   $('yawValue').textContent = data && Number(data.iv) === 1 && data.iy != null ? `${scaled(data.iy, 100, 1)}°` : '—';
-  $('headingError').textContent = data?.nt != null && Number(ns) > 0 ? `${scaled(data.nt, 100, 1)}°` : '—';
+  $('headingError').textContent = data?.nt != null && navActive ? `${scaled(data.nt, 100, 1)}°` : '—';
   if ($('boundaryState')) $('boundaryState').textContent = data?.bs != null ? `边界 ${boundaryStateText(data.bs)}${data.bd != null ? ` · ${scaled(data.bd, 100)}m` : ''}` : '边界 —';
   if ($('returnState')) $('returnState').textContent = data?.rs != null ? returnStateText(data.rs) : '归位 —';
   $('navProgress').style.width = activeTask() && data?.nd != null ? `${Math.max(6, Math.min(100, 100 - Number(data.nd) / 100))}%` : '0%';
@@ -415,7 +416,25 @@ function renderMap() {
     if (!state.map.boatMarker) state.map.boatMarker = L.circleMarker(latLng, { radius: 8, color: '#fff', weight: 3, fillColor: '#4f898c', fillOpacity: 1 }).addTo(map).bindTooltip('无人船'); else state.map.boatMarker.setLatLng(latLng);
     if (!state.map.autoCentered) { map.setView(latLng, BOAT_FOCUS_ZOOM); state.map.autoCentered = true; }
     $('mapCoordinate').textContent = `船位 ${boat.latitude.toFixed(7)}, ${boat.longitude.toFixed(7)}`;
-  } else { if (state.map.boatMarker) { map.removeLayer(state.map.boatMarker); state.map.boatMarker = null; } state.map.autoCentered = false; $('mapCoordinate').textContent = '船位 —'; }
+  } else {
+    if (state.map.boatMarker) { map.removeLayer(state.map.boatMarker); state.map.boatMarker = null; }
+    state.map.autoCentered = false;
+    /* 没有船位时（室内无 GPS 就是这样）把视野落到区域上。
+     * 默认视野是 zoom 4（整个东亚），而区域只有 20×10 米——
+     * 那样区域在地图上只有一个像素，既看不见也点不中。 */
+    if (!state.map.fittedToZones) {
+      const acc = L.latLngBounds([]);
+      for (const zone of visibleZones()) {
+        const b = rectBounds(zone);
+        if (b) { acc.extend(b[0]); acc.extend(b[1]); }
+      }
+      if (acc.isValid()) {
+        map.fitBounds(acc.pad(0.4), { maxZoom: 18 });
+        state.map.fittedToZones = true;
+      }
+    }
+    $('mapCoordinate').textContent = '船位 —';
+  }
   if (state.selectedTarget) {
     const latLng = [state.selectedTarget.latitude, state.selectedTarget.longitude];
     if (!state.map.targetMarker) state.map.targetMarker = L.circleMarker(latLng, { radius: 7, color: '#fff', weight: 3, fillColor: '#ad4842', fillOpacity: 1 }).addTo(map).bindTooltip('目标点'); else state.map.targetMarker.setLatLng(latLng);
@@ -803,7 +822,34 @@ async function emergencyStop() {
   await sendCommand('stop');
 }
 async function retryTarget() { try { const response = await api('/api/sampling/retry-target', { method: 'POST' }); state.sampling = response.sampling || state.sampling; render(); toast('目标重试请求已发送'); } catch (error) { if (error.status === 404) toast('当前服务端未提供目标重试接口，请取消后重新发起巡检', 'warning'); else throw error; } }
-async function sendMapTarget() { if (!state.selectedTarget) return; if (activeTask()) return toast('当前存在区域巡检任务，请先取消后再发送临时地图目标', 'warning'); const config = state.sampling.config || {}; await serialSendObject({ t: 'target', lat: Math.round(state.selectedTarget.latitude * 1e7), lon: Math.round(state.selectedTarget.longitude * 1e7), r: config.fallbackRadiusM || 5, ar: config.arrivalRadiusM || 1, rr: config.returnRadiusM || config.fallbackRadiusM || 8 }); }
+/**
+ * 下发手动地图选点。
+ * 走 /api/targets/point：服务端会等船端 target ack，没等到就重发，
+ * 只有确认船收到了才返回成功。原来的实现只写串口、不等确认，
+ * 在这条半双工链路上会静默失败。
+ */
+async function sendMapTarget() {
+  const target = state.selectedTarget;
+  if (!target) return;
+  if (activeTask()) return toast('当前存在区域巡检任务，请先取消后再发送临时地图目标', 'warning');
+
+  const button = $('sendMapTargetBtn');
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = '下发确认中…';
+
+  try {
+    const response = await api('/api/targets/point', {
+      method: 'POST',
+      body: JSON.stringify({ latitude: target.latitude, longitude: target.longitude })
+    });
+    toast(`目标已送达船端 (${target.latitude.toFixed(6)}, ${target.longitude.toFixed(6)})`);
+    return response;
+  } finally {
+    button.textContent = original;
+    renderTargetControls();
+  }
+}
 async function saveSamplingConfig() { const body = { arrivalRadiusM: +$('arrivalRadiusInput').value, fallbackRadiusM: +$('fallbackRadiusInput').value, boundaryMarginM: +$('boundaryMarginInput').value, returnRadiusM: +$('returnRadiusInput').value, fallbackAfterMs: +$('fallbackAfterInput').value * 1000, targetTimeoutMs: +$('targetTimeoutInput').value * 60000, stabilizationMs: +$('stabilizationInput').value * 1000, sampleIntervalMs: +$('sampleIntervalInput').value * 1000, sampleDurationMs: +$('sampleDurationInput').value * 60000 }; const response = await api('/api/sampling/config', { method: 'PUT', body: JSON.stringify(body) }); state.sampling = response.sampling || state.sampling; state.formDirty.sampling = false; render(); toast('任务参数已保存'); }
 async function manualSample() { const zone = selectedZone(); if (!zone) return toast('请先选择区域', 'warning'); const response = await api('/api/sampling/manual-sample', { method: 'POST', body: JSON.stringify({ zoneId: zone.id }) }); state.samples = response.samples || state.samples; state.latestSampleByZone = response.latestSampleByZone || state.latestSampleByZone; render(); toast('当前遥测已保存为手动样本'); }
 async function testSample() { const zone = selectedZone(); if (!zone) return toast('请先选择区域', 'warning'); const response = await api('/api/sampling/test-sample', { method: 'POST', body: JSON.stringify({ zoneId: zone.id, ph: +$('testPhInput').value, tempC: +$('testTempInput').value, turbidity: +$('testTurbidityInput').value }) }); state.samples = response.samples || state.samples; state.latestSampleByZone = response.latestSampleByZone || state.latestSampleByZone; render(); toast('测试样本已写入'); }

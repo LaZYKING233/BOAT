@@ -176,9 +176,37 @@
         "lengthM": 1,
         "widthM": 1
       },
-      "deletedAt": null,
+      "deletedAt": "2026-11-11T08:21:49.874Z",
       "createdAt": "2026-06-08T13:43:49.811Z",
-      "updatedAt": "2026-06-08T13:43:49.811Z"
+      "updatedAt": "2026-11-11T08:21:49.874Z"
+    },
+    {
+      "id": "zone_20261111082133386_7b5ba559",
+      "name": "Z??? ???",
+      "speciesProfile": {
+        "type": "builtin",
+        "key": "bass",
+        "label": "鲈鱼",
+        "thresholds": {
+          "phMin": 7,
+          "phMax": 8.5,
+          "tempMin": 20,
+          "tempMax": 30,
+          "turbidityMax": 25
+        }
+      },
+      "geometry": {
+        "type": "axis_aligned_rectangle",
+        "center": {
+          "latitude": 34.5015,
+          "longitude": 104.0026
+        },
+        "lengthM": 24,
+        "widthM": 12
+      },
+      "deletedAt": "2026-11-11T08:21:49.930Z",
+      "createdAt": "2026-11-11T08:21:33.386Z",
+      "updatedAt": "2026-11-11T08:21:49.930Z"
     }
   ]
 }
