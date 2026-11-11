@@ -15,16 +15,27 @@ extern "C" {
 #define NAV_HOLD_SPEED      30      // 保持/修正速度(PWM 0-100)
 #define NAV_BOUNDARY_MARGIN 2.0f    // 默认边界容差(米)
 
-/* 定点保持参数
- * 死区内停桨（避免电机反复启停），死区外按距离线性给油门，越远越快，
- * 到 drift_radius 给满。船会一直待在目标点附近，而不是"漂到 drift_radius
- * 才救一次、然后停在边界上"。 */
-#define NAV_HOLD_DEADBAND_MIN  1.0f   // 保持死区下限(米)，实际取 max(到达半径, 此值)
-#define NAV_HOLD_ARM_RATIO     1.5f   // 启动修正的距离 = 死区 × 此系数（迟滞，防抖）
-#define NAV_HOLD_MIN_SPEED     18     // 修正时的最小油门(PWM)
-#define NAV_HOLD_MAX_SPEED     80     // 漂移半径处给到的最大修正油门(PWM)
-                                      // 必须明显大于典型风漂所需的推力，
-                                      // 否则会"一直在修正、一直被冲走"
+/* 区域保持参数
+ *
+ * 语义是"守一个区域"，不是"守一个点"：GPS 静差本来就有 2~5 米，
+ * 守点只会在噪声里来回抖。所以：
+ *   - 在保持半径内：完全不管，随便漂（这就是"区域"）
+ *   - 超出保持半径 × ARM_RATIO：开始往回拉
+ *   - 拉回到保持半径 × RELEASE_RATIO：停桨，留出余量再漂
+ *
+ * ARM_RATIO 取 0.8 而不是 1.0：后端在距离超过保持半径时会暂停采样任务，
+ * 提前一点开始修正，船就不会踩到那条线。
+ */
+#define NAV_HOLD_DEADBAND_MIN    1.0f   // 保持半径下限(米)
+#define NAV_HOLD_RELEASE_RATIO   0.5f   // 收敛目标 = 保持半径 × 此系数
+#define NAV_HOLD_ON_M            1.5f   // 误差超过此值开始修正(米)
+#define NAV_HOLD_OFF_M           0.5f   // 误差低于此值停止修正(米)，迟滞防抖
+#define NAV_HOLD_KP              4.0f   // 比例增益 (PWM / 米)
+#define NAV_HOLD_KI              1.0f   // 积分增益 (PWM / (米·秒))，消除水流造成的稳态偏差
+#define NAV_HOLD_MIN_SPEED       18     // 修正时的最小油门(PWM)
+#define NAV_HOLD_MAX_SPEED       80     // 最大修正油门(PWM)
+#define NAV_HOLD_INT_DECAY       0.998f // 停止修正时积分的泄放系数(每次调用)
+#define NAV_HOLD_INT_LIMIT       80.0f  // 积分上限(PWM)
 
 // 导航状态
 typedef enum
