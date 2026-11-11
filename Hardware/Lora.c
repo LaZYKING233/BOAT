@@ -167,6 +167,33 @@ static uint8_t Lora_ParseCompact(const char *line)
         return 1;
     }
 
+    if (line[0] == 'T' || line[0] == 't')
+    {
+        /* T<毫秒>  设置遥测周期，用于寻找"够实时又能让下行通过"的平衡点 */
+        Lora_Cmd_t cmd;
+        long ms = strtol((char *)line + 1, NULL, 10);
+        memset(&cmd, 0, sizeof(cmd));
+        cmd.valid = 1;
+        snprintf(cmd.cmd, sizeof(cmd.cmd), "T%ld", ms);
+        lora_pending_generic_cmd = cmd;
+        lora_generic_cmd_ready = 1;
+        return 1;
+    }
+
+    if (line[0] == 'Q' || line[0] == 'q' || line[0] == 'L' || line[0] == 'l')
+    {
+        /* Q = 静音（拉长遥测周期），L = 恢复。用于排查上下行抢空口的问题 */
+        Lora_Cmd_t cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        cmd.valid = 1;
+        if (line[0] == 'Q' || line[0] == 'q') strncpy(cmd.cmd, "quiet", sizeof(cmd.cmd) - 1);
+        else strncpy(cmd.cmd, "loud", sizeof(cmd.cmd) - 1);
+
+        lora_pending_generic_cmd = cmd;
+        lora_generic_cmd_ready = 1;
+        return 1;
+    }
+
     if (line[0] == 'P' || line[0] == 'p')
     {
         p = (char *)line + 1;

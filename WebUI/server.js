@@ -1699,7 +1699,24 @@ async function dispatchCurrentTarget(task) {
   broadcastSamplingUpdate();
 
   try {
-    await writeSerialMessage(JSON.stringify(payload), { appendNewline: true, broadcast: false });
+    /* 发出去只是"写进了串口"，不代表船收到了。等它回 target ack，
+     * 没等到就整包重发——半双工链路上这是唯一可靠的送达判据。 */
+    const TARGET_RETRIES = 3;
+    let acked = null;
+    for (let attempt = 1; attempt <= TARGET_RETRIES && !acked; attempt += 1) {
+      await writeSerialMessage(JSON.stringify(payload), { appendNewline: true, broadcast: false });
+      acked = await waitForAck(
+        (a) => a.kind === 'target' && Number(a.lat) === payload.lat && Number(a.lon) === payload.lon,
+        4000
+      );
+      if (!acked && attempt < TARGET_RETRIES) {
+        console.warn(`目标未确认，第 ${attempt} 次重发`);
+      }
+    }
+
+    if (!acked) {
+      throw new Error(`目标下发 ${TARGET_RETRIES} 次均未收到 ack（船端可能未收到）`);
+    }
   } catch (error) {
     if (state.sampling.task === task) {
       pauseSamplingTask('target_send_failed', Date.now());
@@ -1849,6 +1866,33 @@ function parseDecodedPayloads(line) {
   }
 }
 
+/* ---- 下行命令确认 ----
+ * LoRa 是半双工共享信道，上行遥测会占用空口。即使把遥测周期放到 2 秒，
+ * 下行仍可能偶发丢失，所以关键命令必须"发出去 -> 等 ack -> 没等到就重发"。
+ * 只靠一次 writeSerialMessage 成功（那只是写进串口）无法说明船收到了。 */
+const ackWaiters = new Set();
+
+function notifyAck(payload) {
+  for (const waiter of [...ackWaiters]) {
+    let matched = false;
+    try { matched = waiter.test(payload); } catch { matched = false; }
+    if (matched) {
+      ackWaiters.delete(waiter);
+      waiter.resolve(payload);
+    }
+  }
+}
+
+function waitForAck(test, timeoutMs) {
+  return new Promise((resolve) => {
+    const waiter = { test, resolve };
+    ackWaiters.add(waiter);
+    setTimeout(() => {
+      if (ackWaiters.delete(waiter)) resolve(null);
+    }, timeoutMs);
+  });
+}
+
 function applyDecodedPayload(payload, receivedAt) {
   if (payload.t === 'boot') {
     state.latestBoot = payload;
@@ -1856,6 +1900,8 @@ function applyDecodedPayload(payload, receivedAt) {
     state.latestData = payload;
     state.latestDataReceivedAt = receivedAt;
     processSamplingData(payload);
+  } else if (payload.t === 'ack') {
+    notifyAck(payload);
   }
 }
 

@@ -27,6 +27,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <string.h>
+#include <stdlib.h>
 #include "Motor.h"
 #include "Lora.h"
 #include "DS18B20.h"
@@ -49,7 +50,17 @@
 #define TELEMETRY_ADC_VREF_MV           3300U
 #define TELEMETRY_PH_SCALE_NUM          1U
 #define TELEMETRY_PH_SCALE_DEN          1U
-#define TELEMETRY_PERIOD_MS              1000U
+/* 遥测周期。这是上行占用的空口时间，直接决定下行命令能否挤进去。
+ *
+ * 实测（90 字节下行报文，各测 3 次）：
+ *   遥测 1000ms -> 下行 0/3    空口被占满，命令完全发不进去
+ *   遥测 1500ms -> 下行 3/3
+ *   遥测 2000ms -> 下行 3/3
+ *   遥测 3000ms -> 下行 3/3
+ *
+ * 取 2000ms 作为默认：比临界点 1500 留出余量，现场射频环境更差时也不至于失联。
+ * 需要更快的界面刷新可以在运行时用 T<毫秒> 指令调整。 */
+#define TELEMETRY_PERIOD_MS              2000U
 #define NAV_UPDATE_PERIOD_MS             50U
 /* USER CODE END PD */
 
@@ -63,6 +74,10 @@
 /* USER CODE BEGIN PV */
 static uint32_t last_telemetry_ms = 0;
 static uint32_t last_nav_update_ms = 0;
+
+/* 遥测周期可调。上行遥测会占用空中时间，与下行命令互相抢信道；
+ * 把周期拉长可以给下行腾出空口，用于排查链路问题。 */
+static uint32_t telemetry_period_ms = TELEMETRY_PERIOD_MS;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -329,6 +344,28 @@ int main(void)
           last_telemetry_ms = HAL_GetTick();
           Lora_Printf("{\"t\":\"ack\",\"kind\":\"cmd\",\"cmd\":\"sensor\"}\r\n");
         }
+        else if (cmd.cmd[0] == 'T' && cmd.cmd[1] >= '0' && cmd.cmd[1] <= '9')
+        {
+          /* T<ms> 设定遥测周期 */
+          uint32_t ms = (uint32_t)atoi(&cmd.cmd[1]);
+          if (ms < 200U)  ms = 200U;
+          if (ms > 60000U) ms = 60000U;
+          telemetry_period_ms = ms;
+          Lora_Printf("{\"t\":\"ack\",\"kind\":\"cmd\",\"cmd\":\"T\",\"period\":%lu}\r\n",
+                      (unsigned long)telemetry_period_ms);
+        }
+        else if (strcmp(cmd.cmd, "quiet") == 0)
+        {
+          telemetry_period_ms = 8000U;
+          Lora_Printf("{\"t\":\"ack\",\"kind\":\"cmd\",\"cmd\":\"quiet\",\"period\":%lu}\r\n",
+                      (unsigned long)telemetry_period_ms);
+        }
+        else if (strcmp(cmd.cmd, "loud") == 0)
+        {
+          telemetry_period_ms = TELEMETRY_PERIOD_MS;
+          Lora_Printf("{\"t\":\"ack\",\"kind\":\"cmd\",\"cmd\":\"loud\",\"period\":%lu}\r\n",
+                      (unsigned long)telemetry_period_ms);
+        }
         else if (strcmp(cmd.cmd, "dtest") == 0)
         {
           Navigation_Stop();
@@ -425,7 +462,7 @@ int main(void)
         last_nav_update_ms = now;
       }
 
-      if ((now - last_telemetry_ms) >= TELEMETRY_PERIOD_MS)
+      if ((now - last_telemetry_ms) >= telemetry_period_ms)
       {
         Telemetry_SendData();
         last_telemetry_ms = now;
