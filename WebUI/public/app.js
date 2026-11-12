@@ -153,7 +153,7 @@ function riskLevel(sample, zone) {
 const phaseText = phase => ({ dispatching_target: '正在下发目标', navigating: '前往中', stabilizing: '稳定中', sampling: '采样中', paused_warning: '警告暂停', cancelling: '正在取消', completed: '已完成', cancelled: '已取消' })[phase] || '待机';
 const phaseIndex = phase => ({ dispatching_target: 0, navigating: 1, stabilizing: 2, sampling: 3, paused_warning: 1, cancelling: 1, completed: 4 })[phase] ?? -1;
 const activeTask = () => state.sampling.task && ['dispatching_target', 'navigating', 'stabilizing', 'sampling', 'paused_warning', 'cancelling'].includes(state.sampling.task.phase);
-const navStateText = value => ({ 0: '待机', 1: '导航中', 2: '区域保持', 3: 'GPS 丢失', 4: '越界归位' })[value] ?? (value == null ? '—' : `未知(${value})`);
+const navStateText = value => ({ 0: '待机', 1: '导航中', 2: '区域保持', 3: 'GPS 丢失', 4: '越界归位', 5: '航向测试' })[value] ?? (value == null ? '—' : `未知(${value})`);
 const boundaryStateText = value => ({ 0: '未启用', 1: '边界内', 2: '接近边界', 3: '已越界' })[value] ?? (value == null ? '—' : `未知(${value})`);
 const returnStateText = value => ({ 0: '未归位', 1: '归位中', 2: '已回归' })[value] ?? (value == null ? '—' : `未知(${value})`);
 

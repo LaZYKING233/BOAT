@@ -44,11 +44,12 @@ extern "C" {
 // 导航状态
 typedef enum
 {
-    NAV_IDLE = 0,       // 空闲
-    NAV_NAVIGATING,     // 导航中
-    NAV_HOLDING,        // 区域保持/定点保持
-    NAV_NO_GPS,         // GPS未定位
-    NAV_RETURNING,      // 越界归位中
+    NAV_IDLE = 0,        // 空闲
+    NAV_NAVIGATING,      // 导航中
+    NAV_HOLDING,         // 区域保持/定点保持
+    NAV_NO_GPS,          // GPS未定位
+    NAV_RETURNING,       // 越界归位中
+    NAV_HEADING_TEST,    // 航向保持测试（不依赖 GPS，室内调内环用）
 } NavState_t;
 
 // 边界状态
@@ -121,6 +122,24 @@ typedef struct
     float corrected_heading;
 } Navigation_t;
 
+/**
+ * @brief 航向保持测试的指标（阶跃响应用，调内环 PID 的依据）
+ *
+ * 目的：室内没有 GPS 也能调航向环。下发一个目标航向，船会原地转向并保持，
+ * 固件同时统计这些指标，调参时不需要靠肉眼判断。
+ */
+typedef struct {
+    float    target_deg;      // 目标航向
+    float    current_deg;     // 当前航向
+    float    err_deg;         // 当前误差
+    float    step_deg;        // 阶跃幅度（首次误差，带符号）
+    float    overshoot_deg;   // 过冲（朝反方向的最大幅度）
+    float    settle_time_s;   // 进入 ±10° 并保持 1 秒的时间，-1 = 未收敛
+    float    rms_err_deg;     // 误差 RMS
+    uint16_t crossings;       // 误差过零次数（振荡次数的一半）
+    uint32_t samples;         // 样本数
+} NavHeadingMetrics_t;
+
 extern Navigation_t nav;
 extern PID_t heading_pid;
 extern PID_t crosstrack_pid;
@@ -133,6 +152,18 @@ void Navigation_SetMissionTarget(float lat, float lon,
                                  float boundary_length_m, float boundary_width_m, float boundary_margin_m);
 void Navigation_Start(void);
 void Navigation_Stop(void);
+
+/**
+ * @brief 进入航向保持测试模式（不需要 GPS）
+ * @param deg   目标航向角（度，0=北，顺时针为正）
+ * @param speed 基础推力 0-100，0 表示用默认值
+ * @note  退出用 Navigation_Stop()。此模式下航向环正常工作，
+ *        但速度被压得很低，适合室内原地观察转向。
+ */
+void Navigation_StartHeadingTest(float deg, int16_t speed);
+
+/** 取当前航向测试的指标 */
+void Navigation_GetHeadingMetrics(NavHeadingMetrics_t *out);
 
 /**
  * @brief 设置 IMU 偏航角方向

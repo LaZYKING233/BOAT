@@ -154,6 +154,20 @@ typedef struct {
 } Lora_PidCmd_t;
 
 /**
+ * @brief 航向保持测试命令（室内调内环，不需要 GPS）
+ * @note  下发格式：
+ *        {"t":"hdg","deg":90}         进入航向测试，目标 90°
+ *        {"t":"hdg","deg":90,"spd":18} 同时指定基础推力
+ *        {"t":"hdg","q":1}            只查询指标，不改变状态
+ */
+typedef struct {
+    uint8_t valid;
+    uint8_t query;    /* 1 = 只查询指标 */
+    float   deg;      /* 目标航向角（度） */
+    int16_t spd;      /* 基础推力 0-100，0 = 用默认 */
+} Lora_HeadingCmd_t;
+
+/**
  * @brief  启动 LoRa USART3 中断接收（单字节）
  * @note   在 Lora_Init() 之后、主循环之前调用一次
  */
@@ -161,6 +175,9 @@ typedef struct {
 extern volatile uint32_t lora_rx_bytes;
 
 void Lora_StartReceive(void);
+
+/** 取出待处理的航向测试命令 */
+uint8_t Lora_GetPendingHeadingCmd(Lora_HeadingCmd_t *cmd);
 
 /**
  * @brief  处理一个从 USART3 中断收到的字节

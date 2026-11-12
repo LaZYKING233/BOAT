@@ -26,6 +26,8 @@ static Lora_MotorCalCmd_t lora_pending_motorcal_cmd = {0};
 static uint8_t           lora_motorcal_cmd_ready = 0;
 static Lora_PidCmd_t     lora_pending_pid_cmd = {0};
 static uint8_t           lora_pid_cmd_ready = 0;
+static Lora_HeadingCmd_t lora_pending_heading_cmd = {0};
+static uint8_t           lora_heading_cmd_ready = 0;
 static uint16_t          lora_rx_count = 0;
 
 /* 累计收到的字节数。下行不工作时用它区分"物理上没收到"和"收到了但没解析出来"：
@@ -308,6 +310,17 @@ static void Lora_ProcessLine(const char *line)
         lora_pending_motorcal_cmd = cmd;
         lora_motorcal_cmd_ready = 1;
     }
+    else if (strcmp(type, "hdg") == 0)
+    {
+        Lora_HeadingCmd_t cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        cmd.valid = 1;
+        cmd.query = (uint8_t)(Lora_ExtractInt(line, "q", 0) != 0);
+        cmd.deg   = Lora_ExtractFloat(line, "deg", 0.0f);
+        cmd.spd   = (int16_t)Lora_ExtractInt(line, "spd", 0);
+        lora_pending_heading_cmd = cmd;
+        lora_heading_cmd_ready = 1;
+    }
     else if (strcmp(type, "pid") == 0)
     {
         Lora_PidCmd_t cmd;
@@ -422,5 +435,13 @@ uint8_t Lora_GetPendingPidCmd(Lora_PidCmd_t *cmd)
     if (!lora_pid_cmd_ready) return 0;
     *cmd = lora_pending_pid_cmd;
     lora_pid_cmd_ready = 0;
+    return 1;
+}
+
+uint8_t Lora_GetPendingHeadingCmd(Lora_HeadingCmd_t *cmd)
+{
+    if (!lora_heading_cmd_ready) return 0;
+    *cmd = lora_pending_heading_cmd;
+    lora_heading_cmd_ready = 0;
     return 1;
 }

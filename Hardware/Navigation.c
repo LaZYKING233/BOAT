@@ -3,6 +3,7 @@
 #include "IMU901.h"
 #include "Motor.h"
 #include <math.h>
+#include <string.h>
 
 #define EARTH_RADIUS 6371000.0f  // 地球半径(米)
 #define NAV_MIN_RADIUS_M 0.5f
@@ -22,6 +23,102 @@ static float hold_integral = 0.0f;
  * 这里置 -1 把它镜像过来。方向反了船会朝目标的反方向掉头。
  * 运行时可改（下行 {"t":"pid","ys":-1}），水上发现不对能立刻纠正。 */
 static int8_t nav_yaw_sign = 1;
+
+/* --- 航向保持测试（室内调内环，不需要 GPS）--- */
+static NavHeadingMetrics_t hdg_metrics;
+static float    hdg_elapsed_s;
+static float    hdg_in_band_s;
+static float    hdg_prev_err;
+static float    hdg_err_sq_sum;
+static int16_t  hdg_test_speed = 18;
+
+static void Navigation_ResetPidState(void)
+{
+    heading_pid.integral = 0;
+    heading_pid.prev_error = 0;
+    heading_pid.prev_derivative = 0;
+    heading_pid.primed = 0;
+    crosstrack_pid.integral = 0;
+    crosstrack_pid.prev_error = 0;
+    crosstrack_pid.prev_derivative = 0;
+    crosstrack_pid.primed = 0;
+}
+
+static void NavHeadingMetricsReset(void)
+{
+    memset(&hdg_metrics, 0, sizeof(hdg_metrics));
+    hdg_metrics.settle_time_s = -1.0f;
+    hdg_elapsed_s = 0.0f;
+    hdg_in_band_s = 0.0f;
+    hdg_prev_err = 0.0f;
+    hdg_err_sq_sum = 0.0f;
+}
+
+static void NavHeadingMetricsUpdate(float dt_s)
+{
+    float e = nav.heading_error;
+    float sign;
+    float over;
+
+    if (hdg_metrics.samples == 0)
+    {
+        hdg_metrics.step_deg = e;
+        hdg_prev_err = e;
+    }
+
+    hdg_metrics.samples++;
+    hdg_metrics.target_deg = nav.target_heading;
+    hdg_metrics.current_deg = nav.target_heading - e;
+    hdg_metrics.err_deg = e;
+
+    /* 过冲：误差跑到阶跃方向的反面，取最大幅度 */
+    sign = (hdg_metrics.step_deg >= 0.0f) ? 1.0f : -1.0f;
+    over = -e * sign;
+    if (over > hdg_metrics.overshoot_deg) hdg_metrics.overshoot_deg = over;
+
+    /* 过零次数 */
+    if (hdg_metrics.samples > 1 &&
+        ((hdg_prev_err > 0.0f && e < 0.0f) || (hdg_prev_err < 0.0f && e > 0.0f)))
+    {
+        hdg_metrics.crossings++;
+    }
+    hdg_prev_err = e;
+
+    /* 进入 ±10° 并保持 1 秒 = 收敛 */
+    if (fabsf(e) < 10.0f)
+    {
+        hdg_in_band_s += dt_s;
+        if (hdg_in_band_s >= 1.0f && hdg_metrics.settle_time_s < 0.0f)
+        {
+            hdg_metrics.settle_time_s = hdg_elapsed_s - 1.0f;
+        }
+    }
+    else
+    {
+        hdg_in_band_s = 0.0f;
+    }
+
+    hdg_err_sq_sum += e * e;
+    hdg_metrics.rms_err_deg = sqrtf(hdg_err_sq_sum / (float)hdg_metrics.samples);
+    hdg_elapsed_s += dt_s;
+}
+
+void Navigation_StartHeadingTest(float deg, int16_t speed)
+{
+    nav.target_heading = Navigation_NormalizeAngle(deg);
+    hdg_test_speed = (speed > 0 && speed <= 100) ? speed : 18;
+    nav.state = NAV_HEADING_TEST;
+    nav.hold_active = 0;
+    hold_integral = 0.0f;
+    NavHeadingMetricsReset();
+    Navigation_ResetPidState();
+    Motor_Stop_All();
+}
+
+void Navigation_GetHeadingMetrics(NavHeadingMetrics_t *out)
+{
+    if (out) *out = hdg_metrics;
+}
 
 void Navigation_SetYawSign(int8_t sign)
 {
@@ -473,6 +570,17 @@ void Navigation_Update(void)
 
     if (nav.state == NAV_IDLE)
     {
+        return;
+    }
+
+    /* 航向保持测试：不需要 GPS，只用陀螺仪 + 电机
+     * 室内调内环（航向 PID）就靠这个模式。 */
+    if (nav.state == NAV_HEADING_TEST)
+    {
+        current_yaw = IMU901_GetYaw();
+        Navigation_DriveHeading(nav.target_heading, current_yaw,
+                                hdg_test_speed, dt_s);
+        NavHeadingMetricsUpdate(dt_s);
         return;
     }
 

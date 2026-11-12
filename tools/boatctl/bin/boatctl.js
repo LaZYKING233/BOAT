@@ -162,6 +162,70 @@ async function cmdSend(client, positional, flags) {
   return 0;
 }
 
+/**
+ * 航向保持测试：下发一个目标航向，等它稳定，再取固件统计的指标。
+ *
+ * 室内没有 GPS 也能调内环——这条命令只用到陀螺仪和电机。
+ *
+ *   node bin/boatctl.js hdg --deg 90 --wait 12s
+ *   node bin/boatctl.js hdg --q          # 只查询指标
+ */
+async function cmdHdg(client, positional, flags) {
+  await client.connect();
+  await ensureSerial(client, flags);
+  if (!client.isConnected()) { console.error('串口未连接（可加 --open COMx）'); return 1; }
+
+  if (flags.q) {
+    const r = await client.sendReliable({ t: 'hdg', q: 1 }, { expectAck: 'hdg', retries: 4, perTryMs: 2000 });
+    if (!r.ok || !r.ack) { console.error('指标查询未收到应答（船端可能不在航向测试模式）'); return 1; }
+    printHdg(r.ack);
+    return 0;
+  }
+
+  const deg = Number(flags.deg ?? positional[0]);
+  if (!Number.isFinite(deg)) { console.error('用法: hdg --deg 90 [--spd 18] [--wait 12s] [--stop]'); return 2; }
+
+  const spd = Number(flags.spd) || 0;
+  const waitMs = parseDuration(flags.wait, 12000);
+
+  const start = await client.sendReliable({ t: 'hdg', deg, spd }, { expectAck: 'hdg' });
+  if (!start.ok) { console.error('目标航向下发未确认（链路问题）'); return 1; }
+  console.log(`目标航向 ${deg}°，观察 ${waitMs / 1000} 秒…`);
+
+  await new Promise((r) => setTimeout(r, waitMs));
+
+  const q = await client.sendReliable({ t: 'hdg', q: 1 }, { expectAck: 'hdg', retries: 4, perTryMs: 2000 });
+  if (!q.ok || !q.ack) { console.error('指标查询未收到应答'); return 1; }
+  printHdg(q.ack);
+
+  if (flags.stop) {
+    await client.sendReliable({ t: 'cmd', cmd: 'stop' }, { expectAck: 'cmd', retries: 4, perTryMs: 2000 });
+    console.log('已停止');
+  }
+  return 0;
+}
+
+function printHdg(a) {
+  const d = (v) => (v == null ? '—' : (v / 100).toFixed(2));
+  console.log('');
+  console.log('  ===== 航向保持指标 =====');
+  console.log(`  目标角      ${d(a.tg)}°`);
+  console.log(`  当前角      ${d(a.cur)}°`);
+  console.log(`  当前误差    ${d(a.err)}°`);
+  console.log(`  阶跃幅度    ${d(a.step)}°`);
+  console.log(`  过冲        ${d(a.ovs)}°`);
+  console.log(`  收敛时间    ${a.ts >= 0 ? d(a.ts) + ' s' : '未收敛'}`);
+  console.log(`  误差 RMS    ${d(a.rms)}°`);
+  console.log(`  过零次数    ${a.cx}   (0~1 正常，>3 在振荡)`);
+  console.log(`  样本数      ${a.n}`);
+  console.log('');
+  const ts = a.ts; const ovs = a.ovs; const cx = a.cx;
+  if (ts == null || ts < 0) console.log('  判断: 未收敛 —— 船没转到位。先确认能转（ys/电机），再谈调参');
+  else if (cx > 3) console.log('  判断: 振荡 —— kd 加大或 kp 减小');
+  else if (ovs > 2000) console.log('  判断: 过冲偏大 —— kp 略减或 kd 加大');
+  else console.log('  判断: 收敛良好 —— 可尝试把 kp 再提高一点加快响应');
+}
+
 async function cmdSelftest(client, flags) {
   const duration = parseDuration(flags.duration, 15000);
   const waitFirst = parseDuration(flags.wait, 15000);
@@ -552,6 +616,9 @@ function printHelp() {
     watch [--duration 15s]        实时滚屏
     send '<json>'                 发送任意下行 JSON
     cmd <stop|start|sensor>       发送快捷指令
+    hdg --deg 90 [--wait 12s]     航向保持测试（不需要 GPS，室内调内环）
+             --q                     只查询上次的指标
+             --spd 18                基础推力，默认 18
     selftest [--open COMx]        全自动自检（推荐入口）
              --duration 15s         采集窗口
              --wait 15s             首帧超时
@@ -610,6 +677,7 @@ async function main() {
       case 'goto': return await cmdGoto(client, positional, flags);
       case 'navrun': return await cmdNavrun(client, flags);
       case 'setpid': return await cmdSetpid(client, flags);
+      case 'hdg': return await cmdHdg(client, positional, flags);
       default:
         console.error('未知命令: ' + command);
         printHelp();

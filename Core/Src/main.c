@@ -438,6 +438,34 @@ int main(void)
       }
     }
 
+    /* check LoRa downlink heading test command（室内调内环，不需要 GPS） */
+    {
+      Lora_HeadingCmd_t cmd;
+      if (Lora_GetPendingHeadingCmd(&cmd))
+      {
+        if (cmd.query)
+        {
+          NavHeadingMetrics_t m;
+          Navigation_GetHeadingMetrics(&m);
+          /* 角度统一 ×100 用整数回传（newlib-nano 不支持 %f） */
+          Lora_Printf("{\"t\":\"ack\",\"kind\":\"hdg\",\"q\":1,"
+                      "\"tg\":%ld,\"cur\":%ld,\"err\":%ld,\"step\":%ld,"
+                      "\"ovs\":%ld,\"ts\":%ld,\"rms\":%ld,\"cx\":%u,\"n\":%lu}\r\n",
+                      (long)(m.target_deg * 100.0f), (long)(m.current_deg * 100.0f),
+                      (long)(m.err_deg * 100.0f), (long)(m.step_deg * 100.0f),
+                      (long)(m.overshoot_deg * 100.0f), (long)(m.settle_time_s * 100.0f),
+                      (long)(m.rms_err_deg * 100.0f), (unsigned)m.crossings,
+                      (unsigned long)m.samples);
+        }
+        else
+        {
+          Navigation_StartHeadingTest(cmd.deg, cmd.spd);
+          Lora_Printf("{\"t\":\"ack\",\"kind\":\"hdg\",\"tg\":%ld}\r\n",
+                      (long)(nav.target_heading * 100.0f));
+        }
+      }
+    }
+
     /* check LoRa downlink mcal (motor calibration) command */
     {
       Lora_MotorCalCmd_t cmd;
