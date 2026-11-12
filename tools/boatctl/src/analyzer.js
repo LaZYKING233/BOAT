@@ -7,10 +7,15 @@
  */
 
 const THRESHOLDS = {
-  // 主循环周期（固件 telemetry ms 字段的差值）
-  loopIdealMin: 900,
-  loopIdealMax: 1150,
-  loopWarnMax: 1500,        // 超过这个值基本可以断定主循环被阻塞
+  /* 遥测周期（固件 telemetry ms 字段的差值）。
+   *
+   * 注意：主循环本身是 20ms 一拍，这里的周期是"发出遥测的间隔"。
+   * 固件默认 TELEMETRY_PERIOD_MS = 2000，因为 LoRa 半双工要留出空口
+   * 给下行命令——1 秒时下行为 0/3，2 秒时 3/3。
+   * 所以正常值是 2000ms，不是 1000ms。 */
+  loopIdealMin: 1700,
+  loopIdealMax: 2400,
+  loopWarnMax: 3200,        // 超过这个值说明真的被阻塞了，或者被 T 指令改小了周期
   // 丢包
   seqGapWarnRatio: 0.02,
   seqGapFailRatio: 0.10,
@@ -118,12 +123,13 @@ function analyze(samples) {
   // 主循环节奏：这是本项目历史上最致命的问题
   if (loop && loopDeltas.length >= 3) {
     if (loop.mean >= THRESHOLDS.loopIdealMin && loop.mean <= THRESHOLDS.loopIdealMax) {
-      add('loop', 'ok', '主循环节奏正常', `周期均值 ${loop.mean}ms（目标 1000ms）`);
+      add('loop', 'ok', '遥测周期正常', `周期均值 ${loop.mean}ms（默认 2000ms，为下行留空口）`);
     } else if (loop.mean <= THRESHOLDS.loopWarnMax) {
-      add('loop', 'warn', '主循环略慢', `周期均值 ${loop.mean}ms，最大 ${loop.max}ms。可能有阻塞源`);
+      add('loop', 'warn', '遥测周期偏离默认值',
+        `周期均值 ${loop.mean}ms（默认 2000ms）。可能是用 T 指令改过；改到 1000ms 会让下行发不进去`);
     } else {
-      add('loop', 'fail', '主循环被严重阻塞',
-        `周期均值 ${loop.mean}ms（应为 1000ms）。导航 PID 在这个节奏下无法工作，先排查阻塞`);
+      add('loop', 'fail', '遥测周期异常',
+        `周期均值 ${loop.mean}ms（默认 2000ms）。要么主循环被阻塞，要么 T 指令把周期改乱了`);
     }
   } else if (packets > 1) {
     add('loop', 'warn', '主循环周期样本不足', '采集时间太短，建议至少 10 秒');
