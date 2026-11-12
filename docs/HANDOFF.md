@@ -169,6 +169,20 @@ make.exe -C Debug -j8 all
 **必须看到 `Download verified successfully`**。出现过"命令返回成功但实际没写进去"的情况，
 不看这一行会得出完全错误的结论。
 
+### 6.2b 没装 CubeIDE 的机器怎么烧
+
+仓库里已经放好编译产物，直接烧 bin 即可（不需要工具链）：
+
+```powershell
+& '<STM32_Programmer_CLI 的完整路径>' -c port=SWD mode=normal freq=4000 `
+  -w 'firmware\BOAT-2026-11-12-kp0.8.bin' 0x08000000 -v -rst
+```
+
+`firmware/BOAT-2026-11-12-kp0.8.bin` 对应提交 `b7c8620`（kp=0.8 / ki=0 / kd=0.3 / 上限 45）。
+
+> 注意：`.bin` 不带地址信息，**必须显式指定 `0x08000000`**。
+> 有工具链时优先烧 `.elf`，更不容易出错。
+
 ### 6.3 启动上位机
 
 ```
