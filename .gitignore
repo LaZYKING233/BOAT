@@ -8,6 +8,8 @@ Debug/*.elf
 Debug/*.elf.bak
 Debug/*.map
 Debug/*.list
+# objects.list 是链接输入（CubeIDE 生成的 OBJS 清单），必须入库，否则 clone 下来 make 直接报 No rule to make target
+!/Debug/objects.list
 Debug/*.bin
 Debug/**/*.o
 Debug/**/*.d
