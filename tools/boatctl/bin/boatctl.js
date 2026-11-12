@@ -220,7 +220,8 @@ function printHdg(a) {
   console.log(`  样本数      ${a.n}`);
   console.log('');
   const ts = a.ts; const ovs = a.ovs; const cx = a.cx;
-  if (ts == null || ts < 0) console.log('  判断: 未收敛 —— 船没转到位。先确认能转（ys/电机），再谈调参');
+  if (!a.n) console.log('  判断: 还没跑过测试 —— 先执行 hdg --deg 90');
+  else if (ts == null || ts < 0) console.log('  判断: 未收敛 —— 船没转到位。先确认能转（ys/电机），再谈调参');
   else if (cx > 3) console.log('  判断: 振荡 —— kd 加大或 kp 减小');
   else if (ovs > 2000) console.log('  判断: 过冲偏大 —— kp 略减或 kd 加大');
   else console.log('  判断: 收敛良好 —— 可尝试把 kp 再提高一点加快响应');

@@ -218,7 +218,33 @@ node bin/boatctl.js navrun --url http://127.0.0.1:3000 --to 39.1032,117.3476 --l
 
 > 不要加 `--open COM6`：WebUI 已经占着该串口，虽然接口幂等不会报错，但也没必要。
 
-### 6.5 室内调航向环（不需要 GPS）
+### 6.4b 中继盒子上编译与烧录
+
+`_outdoor_kit` 是便携环境包（gcc/make/openocd/cubeprog/node + 工程 + 一键 bat），
+拷到任意 Windows 机器即可编译烧录，不联网、不装东西。
+
+```
+1-环境自检.bat    gcc/make/openocd/node 四个 [OK]
+2-编译固件.bat    make -C Debug
+3-烧录固件.bat    STM32_Programmer_CLI，失败自动换 OpenOCD
+4-串口监视.bat
+5-启动WebUI.bat
+7-安装STLink驱动.bat
+```
+
+**三个已修的坑**（换机器时最容易踩）：
+
+1. `Debug/makefile` 里的链接脚本原来写的是绝对路径 `E:\STM32\BOAT\...`，
+   换盘符就编译失败。**已改成相对路径 `../STM32U5A5ZJTXQ_FLASH.ld`**，
+   任何目录都能直接用。
+2. 旧的 `Repair-ProjectPaths` 用了"先换回旧路径再替换"的写法，遇到已改过的
+   字符串会拼出**双层路径**。现在 makefile 用相对路径，该函数已改为空实现。
+3. 编辑 `_internal/*.ps1` 后**必须保留 UTF-8 BOM**，否则 PowerShell 5.1 按
+   ANSI 读中文会报"缺少右花括号"。
+
+---
+
+## 6.5 室内调航向环（不需要 GPS）
 
 固件新增了**航向保持测试模式**：只用陀螺仪 + 电机，完全不依赖 GPS。
 室内就可以把内环（航向 PID）调好，出去只做一次验证。
