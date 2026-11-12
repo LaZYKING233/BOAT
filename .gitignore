@@ -64,6 +64,9 @@ __pycache__/
 *.pyc
 *.npy
 
+# ---------- 户外便携离线包（1.5 GB，不入库）----------
+/_outdoor_kit/
+
 # ---------- 系统 ----------
 Thumbs.db
 desktop.ini

@@ -1,0 +1,77 @@
+{
+  "schema": 1,
+  "project": "BOAT",
+  "note": "Rebuild the reference build environment on another Windows machine. Hashes are verified after download; mismatch aborts the install.",
+  "generated_at": "2026-11-12",
+  "generated_on": "E:\\STM32\\BOAT (Windows 11 26100, amd64)",
+  "target_mcu": "STM32U5A5ZJTxQ (Cortex-M33, fpv5-sp-d16)",
+  "install_root_default": "%LOCALAPPDATA%\\boat-env",
+  "reference_versions": {
+    "arm-none-eabi-gcc": "14.3.1 20250623 (GNU Tools for STM32 14.3.rel1)",
+    "make": "GNU Make 4.4.1",
+    "openocd": "OpenOCD 0.12.0",
+    "node": "v24.15.0",
+    "stm32cubeprogrammer": "v2.22.0 (optional, offline kit only)"
+  },
+  "artifacts": [
+    {
+      "name": "gcc",
+      "label": "arm-none-eabi-gcc 14.3.rel1 (ARM official)",
+      "url": "https://armkeil.blob.core.windows.net/developer/Files/downloads/gnu/14.3.rel1/binrel/arm-gnu-toolchain-14.3.rel1-mingw-w64-i686-arm-none-eabi.zip",
+      "url_alt": "https://developer.arm.com/-/media/Files/downloads/gnu/14.3.rel1/binrel/arm-gnu-toolchain-14.3.rel1-mingw-w64-i686-arm-none-eabi.zip",
+      "size_bytes": 291670457,
+      "hash_algo": "md5-base64",
+      "hash": "o/r6pfz+NOm9MN9hYxaBPg==",
+      "hash_source": "HTTP Content-MD5 from armkeil blob CDN",
+      "verify_marker": "arm-none-eabi-gcc.exe",
+      "unpacked_mb": 1147
+    },
+    {
+      "name": "make",
+      "label": "GNU Make 4.4.1 (xpack build tools)",
+      "url": "https://github.com/xpack-dev-tools/windows-build-tools-xpack/releases/download/v4.4.1-3/xpack-windows-build-tools-4.4.1-3-win32-x64.zip",
+      "size_bytes": 2688306,
+      "hash_algo": "sha256",
+      "hash": "113d4dfdbbc56dc9b865c9f75d38cd0da82f0d7094187e6f7a803fe6eef1d218",
+      "hash_source": "upstream .sha asset, re-verified locally",
+      "verify_marker": "make.exe",
+      "unpacked_mb": 8
+    },
+    {
+      "name": "openocd",
+      "label": "OpenOCD 0.12.0 (xpack, ships target/stm32u5x.cfg)",
+      "url": "https://github.com/xpack-dev-tools/openocd-xpack/releases/download/v0.12.0-6/xpack-openocd-0.12.0-6-win32-x64.zip",
+      "size_bytes": 3090548,
+      "hash_algo": "sha256",
+      "hash": "c57724f87219bafde78f61b54fb7f303f456fed9826a3d0ee2d54d461ad58020",
+      "hash_source": "upstream .sha asset, re-verified locally",
+      "verify_marker": "openocd.exe",
+      "unpacked_mb": 12
+    },
+    {
+      "name": "node",
+      "label": "Node.js v24.15.0 (win-x64)",
+      "url": "https://nodejs.org/dist/v24.15.0/node-v24.15.0-win-x64.zip",
+      "size_bytes": 36465163,
+      "hash_algo": "sha256",
+      "hash": "cc5149eabd53779ce1e7bdc5401643622d0c7e6800ade18928a767e940bb0e62",
+      "hash_source": "nodejs.org SHASUMS256.txt",
+      "verify_marker": "node.exe",
+      "unpacked_mb": 95
+    }
+  ],
+  "flash": {
+    "primary": "STM32_Programmer_CLI -c port=SWD mode=UR -w <elf> -v -rst",
+    "fallback": "openocd -s <openocd>/share/openocd/scripts -f interface/stlink-dap.cfg -f target/stm32u5x.cfg -c program <elf> verify reset exit",
+    "note": "openocd script dir differs per distribution (xpack: <root>/openocd/scripts, ST bundle: <root>/scripts); dev.ps1 locates it by searching for target/stm32u5x.cfg."
+  },
+  "acceptance": {
+    "build_command": "make -C Debug -j 8 all",
+    "elf": "Debug/BOAT.elf",
+    "text_size_range": [95000, 130000],
+    "reference_size": { "text": 111020, "data": 496, "bss": 15256 },
+    "expect_strings": [
+      "Finished building target: BOAT.elf"
+    ]
+  }
+}
