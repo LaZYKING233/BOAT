@@ -687,7 +687,7 @@ function renderDiagnostics() {
 
 function renderConnection() {
   $('connectedPort').textContent = state.status.connected ? `${state.status.portPath || '—'} · ${state.status.baudRate || '—'}` : '未连接'; setRiskBadge($('serialBadge'), { level: state.status.connected ? 'normal' : 'unknown', label: state.status.connected ? '已连接' : '未连接' });
-  $('connectBtn').disabled = state.status.connected || !$('serialSelect').value; $('disconnectBtn').disabled = !state.status.connected; $('sidebarDevice').textContent = state.status.portPath || '等待设备'; $('sidebarDeviceState').textContent = state.status.connected ? '串口已连接' : '串口未连接'; $('sidebarDot').className = `status-dot ${state.status.connected ? 'online' : ''}`;
+  $('connectBtn').disabled = state.status.connected || (!$('serialSelect').value && !($('serialManual') && $('serialManual').value.trim())); $('disconnectBtn').disabled = !state.status.connected; $('sidebarDevice').textContent = state.status.portPath || '等待设备'; $('sidebarDeviceState').textContent = state.status.connected ? '串口已连接' : '串口未连接'; $('sidebarDot').className = `status-dot ${state.status.connected ? 'online' : ''}`;
   const controls = qsa('[data-command], #sendCommandBtn, #sendMotorBtn, #stopMotorsBtn, #sendCalibrationBtn'); controls.forEach(control => { control.disabled = !state.status.connected; });
   $('manualSampleBtn').disabled = !state.status.connected || !state.latestData;
 }
@@ -805,7 +805,16 @@ async function refreshPorts() {
   renderConnection(); renderGpsTest();
 }
 
-async function connectSerial() { const path = $('serialSelect').value; if (!path) return toast('请先选择串口', 'warning'); await api('/api/serial/open', { method: 'POST', body: JSON.stringify({ path, baudRate: Number($('baudSelect').value) || 115200 }) }); await refreshStatus(); toast('串口连接请求成功'); }
+async function connectSerial() {
+  /* 网络串口优先：填了 tcp://... 就连远端中继，否则用本地 COM 口 */
+  const manual = ($('serialManual').value || '').trim();
+  const path = manual || $('serialSelect').value;
+  if (!path) return toast('请先选择串口，或填写网络串口地址', 'warning');
+  if (manual) localStorage.setItem('boatSerialManual', manual);
+  await api('/api/serial/open', { method: 'POST', body: JSON.stringify({ path, baudRate: Number($('baudSelect').value) || 115200 }) });
+  await refreshStatus();
+  toast(manual ? `已连接远端中继 ${manual}` : '串口连接请求成功');
+}
 async function disconnectSerial() { await api('/api/serial/close', { method: 'POST' }); await refreshStatus(); toast('串口已断开', 'warning'); }
 async function connectGpsTest() { const path = $('gpsTestPortSelect').value; if (!path) return toast('请先选择 GPS 串口', 'warning'); const response = await api('/api/gps-test/open', { method: 'POST', body: JSON.stringify({ path, baudRate: Number($('gpsTestBaudSelect').value) || 38400 }) }); state.gpsTest = response.gpsTest || state.gpsTest; renderGpsTest(); toast('GPS 测试串口已连接'); }
 async function disconnectGpsTest() { const response = await api('/api/gps-test/close', { method: 'POST' }); state.gpsTest = response.gpsTest || state.gpsTest; state.gpsTestMap.autoCentered = false; renderGpsTest(); toast('GPS 测试串口已断开', 'warning'); }
@@ -991,6 +1000,9 @@ function bindEvents() {
 async function bootstrap() {
   bindEvents(); ensureMap();
   if (localStorage.getItem('boatAdvanced') === '1') { $('advancedToggle').checked = true; document.body.classList.add('advanced'); }
+  /* 恢复上次填过的网络串口地址（连远端中继时常用） */
+  const savedManual = localStorage.getItem('boatSerialManual');
+  if (savedManual && $('serialManual')) { $('serialManual').value = savedManual; }
   renderBuiltinSpecies(); updateSpeciesForm(false); render(); connectSocket();
   try { await Promise.all([refreshPorts(), refreshStatus()]); } catch (error) { toast(`初始化未完成：${error.message}`, 'warning'); }
   ensureSelection(); if (!state.creatingZone) fillRegionForm(selectedZone()); state.regionMap.resetForm = captureRegionForm(); render(); window.setInterval(renderFreshness, 1000);
