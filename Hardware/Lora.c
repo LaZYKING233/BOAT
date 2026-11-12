@@ -323,6 +323,11 @@ static void Lora_ProcessLine(const char *line)
         cmd.xki = Lora_ExtractFloat(line, "xki", -1.0f);
         cmd.xkd = Lora_ExtractFloat(line, "xkd", -1.0f);
 
+        /* IMU 偏航角方向。0 = 本次不提供（保持当前值）。
+         * 不同模块的 yaw 可能顺时针增大或逆时针增大，方向反了船会掉头；
+         * 做成运行时可调，水上发现不对可以立刻改，不用捞船重烧。 */
+        cmd.ys = (int8_t)Lora_ExtractInt(line, "ys", 0);
+
         lora_pending_pid_cmd = cmd;
         lora_pid_cmd_ready = 1;
     }

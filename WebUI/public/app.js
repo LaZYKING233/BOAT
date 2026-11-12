@@ -17,7 +17,7 @@ const state = {
   buffers: { ph: [], temp: [], turb: [] },
   aiChat: { messagesByZone: {}, loading: false },
   formDirty: { region: false, sampling: false, llm: false },
-  map: { instance: null, tileLayer: null, tileMode: 'standard', boatMarker: null, targetMarker: null, zoneLayers: {}, pointMarkers: [], autoCentered: false, fittedToZones: false },
+  map: { instance: null, tileLayer: null, tileMode: 'standard', boatMarker: null, targetMarker: null, zoneLayers: {}, pointMarkers: [], autoCentered: false, fittedToZones: false, everHadFix: false },
   regionMap: { instance: null, tileLayer: null, draftLayer: null, previewLayer: null, contextLayers: {}, drawing: false, drawStart: null, resetForm: null, focusPending: false },
   gpsTest: { connected: false, portPath: null, baudRate: null, partialBytes: 0, lastSentenceAt: null, sentenceCount: 0, byteCount: 0, checksumErrors: 0, latest: null, lines: [], track: [] },
   gpsTestMap: { instance: null, tileLayer: null, marker: null, trackLine: null, autoCentered: false },
@@ -414,7 +414,19 @@ function renderMap() {
   if (boat) {
     const latLng = [boat.latitude, boat.longitude];
     if (!state.map.boatMarker) state.map.boatMarker = L.circleMarker(latLng, { radius: 8, color: '#fff', weight: 3, fillColor: '#4f898c', fillOpacity: 1 }).addTo(map).bindTooltip('无人船'); else state.map.boatMarker.setLatLng(latLng);
-    if (!state.map.autoCentered) { map.setView(latLng, BOAT_FOCUS_ZOOM); state.map.autoCentered = true; }
+    /* 有定位就以船为准：
+     *   第一次拿到定位        -> 直接居中到船
+     *   之后船跑出当前视野    -> 自动跟过去
+     * 之前只居中一次，且若页面先无定位把视野落到了区域上（可能在几百公里外），
+     * 定位回来时也不会切回来，地图就一直停在错误的位置。 */
+    if (!state.map.autoCentered) {
+      map.setView(latLng, BOAT_FOCUS_ZOOM);
+      state.map.autoCentered = true;
+    } else if (!map.getBounds().contains(latLng)) {
+      map.setView(latLng, Math.max(map.getZoom(), BOAT_FOCUS_ZOOM));
+    }
+    state.map.fittedToZones = false;   /* 有定位时不再"缩放到区域" */
+    state.map.everHadFix = true;       /* 定位过之后就再也不跳到区域上 */
     $('mapCoordinate').textContent = `船位 ${boat.latitude.toFixed(7)}, ${boat.longitude.toFixed(7)}`;
   } else {
     if (state.map.boatMarker) { map.removeLayer(state.map.boatMarker); state.map.boatMarker = null; }
@@ -422,7 +434,10 @@ function renderMap() {
     /* 没有船位时（室内无 GPS 就是这样）把视野落到区域上。
      * 默认视野是 zoom 4（整个东亚），而区域只有 20×10 米——
      * 那样区域在地图上只有一个像素，既看不见也点不中。 */
-    if (!state.map.fittedToZones) {
+    /* 只在"从来没拿到过定位"时才把视野落到区域上。
+     * 一旦定位过，GPS 短暂掉线时保持当前视野，否则地图会突然跳回
+     * 区域所在的位置（可能几百公里外），水面上完全没法用。 */
+    if (!state.map.fittedToZones && !state.map.everHadFix) {
       const acc = L.latLngBounds([]);
       for (const zone of visibleZones()) {
         const b = rectBounds(zone);

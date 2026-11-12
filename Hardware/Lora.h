@@ -150,6 +150,7 @@ typedef struct {
     uint8_t  valid;
     float    hkp, hki, hkd;  /* 内环：航向误差 -> 转向输出 */
     float    xkp, xki, xkd;  /* 外环：横向偏差 -> 目标航向修正 */
+    int8_t   ys;             /* IMU 偏航角方向：0=保持不变，+1/-1=设置 */
 } Lora_PidCmd_t;
 
 /**

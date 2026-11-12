@@ -1960,10 +1960,53 @@ function handleSerialChunk(chunk) {
   broadcast({ kind: 'serial-status', status: getSerialStatus() });
 }
 
+/* 串口自动重连。
+ *
+ * CH340 这类 USB 转串口会在设备重新枚举、USB 省电挂起、线材接触不良时
+ * 自己 close。人在水边，网页就是唯一的窗口，断了就没法手动点重连。
+ * 所以记住最后一次成功打开的端口，掉线后每 2 秒重试，直到成功。
+ *
+ * 用户主动"断开连接"时置 suspended，不再重连。 */
+const autoReconnect = { path: null, baudRate: null, timer: null, attempts: 0, suspended: false };
+const AUTO_RECONNECT_MS = 2000;
+
 function resetPortState() {
   activePort = null;
   activeBaudRate = DEFAULT_BAUD_RATE;
   lineBuffer = Buffer.alloc(0);
+}
+
+function scheduleReconnect() {
+  if (autoReconnect.suspended || !autoReconnect.path || autoReconnect.timer) {
+    return;
+  }
+
+  autoReconnect.timer = setTimeout(async () => {
+    autoReconnect.timer = null;
+
+    if (autoReconnect.suspended || !autoReconnect.path) return;
+    if (activePort && activePort.isOpen) return;
+
+    const target = autoReconnect.path;
+    const baudRate = autoReconnect.baudRate || DEFAULT_BAUD_RATE;
+
+    try {
+      const port = await openSerialPort(target, baudRate);
+      activePort = port;
+      activeBaudRate = baudRate;
+      lineBuffer = Buffer.alloc(0);
+      bindPortEvents(port);
+      autoReconnect.attempts = 0;
+      console.log(`[serial] 自动重连成功: ${target} @ ${baudRate}`);
+      broadcast({ kind: 'serial-status', status: getSerialStatus(), reconnected: true });
+    } catch (error) {
+      autoReconnect.attempts += 1;
+      if (autoReconnect.attempts === 1 || autoReconnect.attempts % 15 === 0) {
+        console.warn(`[serial] 重连失败(第 ${autoReconnect.attempts} 次): ${target} — ${error.message}`);
+      }
+      scheduleReconnect();
+    }
+  }, AUTO_RECONNECT_MS);
 }
 
 function bindPortEvents(port) {
@@ -1990,8 +2033,13 @@ function bindPortEvents(port) {
       return;
     }
 
+    const wasWanted = !autoReconnect.suspended && autoReconnect.path === port.path;
     resetPortState();
-    broadcast({ kind: 'serial-status', status: getSerialStatus() });
+    broadcast({ kind: 'serial-status', status: getSerialStatus(), lost: true });
+    if (wasWanted) {
+      console.log(`[serial] 连接断开: ${port.path}，开始自动重连`);
+      scheduleReconnect();
+    }
   });
 }
 
@@ -2648,6 +2696,12 @@ app.post('/api/serial/open', async (req, res) => {
     lineBuffer = Buffer.alloc(0);
     bindPortEvents(port);
 
+    autoReconnect.path = portPath;
+    autoReconnect.baudRate = baudRate;
+    autoReconnect.suspended = false;
+    autoReconnect.attempts = 0;
+    if (autoReconnect.timer) { clearTimeout(autoReconnect.timer); autoReconnect.timer = null; }
+
     broadcast({ kind: 'serial-status', status: getSerialStatus() });
 
     res.json({
@@ -2662,6 +2716,9 @@ app.post('/api/serial/open', async (req, res) => {
 
 app.post('/api/serial/close', async (_req, res) => {
   try {
+    /* 用户主动断开：停止自动重连，否则关掉马上又被拉起来 */
+    autoReconnect.suspended = true;
+    if (autoReconnect.timer) { clearTimeout(autoReconnect.timer); autoReconnect.timer = null; }
     await closeActivePort();
     res.json({ ok: true, message: '串口已断开', status: getSerialStatus() });
   } catch (error) {

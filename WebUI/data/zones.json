@@ -36,9 +36,9 @@
         "lengthM": 20,
         "widthM": 10
       },
-      "deletedAt": null,
+      "deletedAt": "2026-11-12T03:05:31.603Z",
       "createdAt": "2026-06-06T18:55:41.692Z",
-      "updatedAt": "2026-06-06T18:55:41.692Z"
+      "updatedAt": "2026-11-12T03:05:31.603Z"
     },
     {
       "id": "zone_B",
@@ -64,9 +64,9 @@
         "lengthM": 20,
         "widthM": 10
       },
-      "deletedAt": null,
+      "deletedAt": "2026-11-12T03:05:31.628Z",
       "createdAt": "2026-06-06T18:55:41.692Z",
-      "updatedAt": "2026-06-06T18:55:41.692Z"
+      "updatedAt": "2026-11-12T03:05:31.628Z"
     },
     {
       "id": "zone_C",
@@ -92,9 +92,9 @@
         "lengthM": 20,
         "widthM": 10
       },
-      "deletedAt": null,
+      "deletedAt": "2026-11-12T03:05:31.652Z",
       "createdAt": "2026-06-06T18:55:41.692Z",
-      "updatedAt": "2026-06-06T18:55:41.692Z"
+      "updatedAt": "2026-11-12T03:05:31.652Z"
     },
     {
       "id": "zone_D",
@@ -120,9 +120,9 @@
         "lengthM": 20,
         "widthM": 10
       },
-      "deletedAt": null,
+      "deletedAt": "2026-11-12T03:05:31.673Z",
       "createdAt": "2026-06-06T18:55:41.692Z",
-      "updatedAt": "2026-06-06T18:55:41.692Z"
+      "updatedAt": "2026-11-12T03:05:31.673Z"
     },
     {
       "id": "zone_E",
@@ -148,9 +148,9 @@
         "lengthM": 20,
         "widthM": 10
       },
-      "deletedAt": null,
+      "deletedAt": "2026-11-12T03:05:31.694Z",
       "createdAt": "2026-06-06T18:55:41.692Z",
-      "updatedAt": "2026-06-06T18:55:41.692Z"
+      "updatedAt": "2026-11-12T03:05:31.694Z"
     },
     {
       "id": "zone_20260608134349811_29c8bd21",
