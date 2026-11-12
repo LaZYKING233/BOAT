@@ -12,6 +12,10 @@ extern "C" {
 #define NAV_DRIFT_RADIUS    8.0f    // 漂移修正触发半径(米)，超过此距离返回目标
 #define NAV_BASE_SPEED      60      // 基础前进速度(PWM 0-100)
 #define NAV_MAX_TURN_SPEED  80      // 最大转向速度(PWM 0-100)
+#define NAV_HEADING_TURN_LIMIT 45   // 航向环转向输出上限
+                                    // 原为 80，配合 kp=2.0 时航向误差 40° 就打满，
+                                    // 船失去比例调节、只能全力自旋。45 既保留转向能力，
+                                    // 又给"误差变小 -> 转向变小"留出空间。
 #define NAV_HOLD_SPEED      30      // 保持/修正速度(PWM 0-100)
 #define NAV_BOUNDARY_MARGIN 2.0f    // 默认边界容差(米)
 
@@ -129,6 +133,15 @@ void Navigation_SetMissionTarget(float lat, float lon,
                                  float boundary_length_m, float boundary_width_m, float boundary_margin_m);
 void Navigation_Start(void);
 void Navigation_Stop(void);
+
+/**
+ * @brief 设置 IMU 偏航角方向
+ * @param sign +1 = yaw 顺时针增大（罗盘约定，0=北/90=东）；-1 = 逆时针增大
+ * @note  目标方位角是按罗盘约定算的（顺时针为正）。若模块的 yaw 是逆时针
+ *        增大，必须置 -1，否则航向误差符号相反，船会朝目标的反方向掉头。
+ */
+void Navigation_SetYawSign(int8_t sign);
+int8_t Navigation_GetYawSign(void);
 
 /**
  * @brief  运行时设置双层 PID 增益（上位机下发，免重新编译烧录）

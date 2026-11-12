@@ -15,6 +15,23 @@ Navigation_t nav;
 /* 区域保持的积分项。P 控制在恒定水流下必然有稳态偏差（船停在
  * "推力刚好等于水流"的距离上），积分把它消掉。 */
 static float hold_integral = 0.0f;
+
+/* IMU 偏航角方向。
+ *
+ * 目标方位角按罗盘约定（0=北，顺时针为正）。如果模块的 yaw 是逆时针增大，
+ * 这里置 -1 把它镜像过来。方向反了船会朝目标的反方向掉头。
+ * 运行时可改（下行 {"t":"pid","ys":-1}），水上发现不对能立刻纠正。 */
+static int8_t nav_yaw_sign = 1;
+
+void Navigation_SetYawSign(int8_t sign)
+{
+    nav_yaw_sign = (sign < 0) ? -1 : 1;
+}
+
+int8_t Navigation_GetYawSign(void)
+{
+    return nav_yaw_sign;
+}
 PID_t heading_pid;
 PID_t crosstrack_pid;
 
@@ -218,7 +235,11 @@ void Navigation_Init(void)
      *   integral_limit = 60        : 积分最多贡献 0.35*60 = 21 PWM
      *   derivative_filter = 0.7    : 微分一阶低通，滤掉 IMU 抖动
      */
-    PID_Init(&heading_pid, 2.0f, 0.35f, 0.25f, 60.0f, (float)NAV_MAX_TURN_SPEED, 0.7f);
+    /* 实测修正：原来 kp=2.0 + 上限 80，航向误差超过 40° 就饱和，
+     * 低于 40° 才有比例调节。水上实测船原地打转，转向输出长期 ±80。
+     * 改成 kp=0.8 + 上限 45：误差 30° -> 24，10° -> 8，全程有比例调节。
+     * ki 先留 0（大误差下积分会顶到上限、加剧打转），kd=0.3 提供阻尼。 */
+    PID_Init(&heading_pid, 0.8f, 0.0f, 0.30f, 60.0f, (float)NAV_HEADING_TURN_LIMIT, 0.7f);
 
     /* 横向偏差 PID（输入=米，输出=航向修正角）
      *   kp = 2.3      dag/m       : 偏 1 米修 2.3 度
@@ -403,7 +424,9 @@ static void Navigation_DriveHeading(float desired_heading, float current_yaw, in
     nav.target_heading = Navigation_NormalizeAngle(desired_heading);
 
     // 计算航向误差（归一化到 -180 ~ 180）
-    nav.heading_error = Navigation_NormalizeAngle(nav.target_heading - current_yaw);
+    /* 按标定方向把当前偏航角折算成罗盘约定 */
+    nav.heading_error = Navigation_NormalizeAngle(
+        nav.target_heading - current_yaw * (float)nav_yaw_sign);
 
     // PID计算转向输出（带真实时间步长）
     nav.turn_output = (int16_t)PID_Calculate(&heading_pid, nav.heading_error, dt_s);
