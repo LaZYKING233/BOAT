@@ -137,6 +137,7 @@ typedef struct {
     int16_t  ro;             /* right_offset */
     int16_t  ldz;            /* left_deadzone，负数 = 保持当前值 */
     int16_t  rdz;            /* right_deadzone，负数 = 保持当前值 */
+    int8_t   dir;            /* 推进电机方向符号：0=保持，+1/-1=设置 */
 } Lora_MotorCalCmd_t;
 
 /**
@@ -151,6 +152,7 @@ typedef struct {
     float    hkp, hki, hkd;  /* 内环：航向误差 -> 转向输出 */
     float    xkp, xki, xkd;  /* 外环：横向偏差 -> 目标航向修正 */
     int8_t   ys;             /* IMU 偏航角方向：0=保持不变，+1/-1=设置 */
+    float    yawos;          /* IMU 安装偏置(度)：-999 = 保持不变 */
 } Lora_PidCmd_t;
 
 /**

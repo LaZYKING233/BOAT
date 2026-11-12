@@ -189,7 +189,7 @@ static void Telemetry_SendData(void)
               "\"aiph\":%u,\"aiphn\":%u,\"ait\":%u,\"aitn\":%u,"
               "\"api\":%d,\"apd\":%d,\"ati\":%d,\"atd\":%d,"
               "\"mls\":%ld,\"mrs\":%ld,\"mlo\":%ld,\"mro\":%ld,"
-              "\"mlz\":%ld,\"mrz\":%ld,\"ys\":%d}\r\n",
+              "\"mlz\":%ld,\"mrz\":%ld,\"ys\":%d,\"yos\":%ld,\"mds\":%d}\r\n",
               (unsigned long)seq++,
               (unsigned long)HAL_GetTick(),
               (long)ph_x100,
@@ -242,7 +242,9 @@ static void Telemetry_SendData(void)
               (long)motor_cal.right_offset,
               (long)motor_cal.left_deadzone,
               (long)motor_cal.right_deadzone,
-              (int)Navigation_GetYawSign());
+              (int)Navigation_GetYawSign(),
+              (long)(Navigation_GetYawOffset() * 100.0f),
+              (int)motor_cal.dir_sign);
 }
 /* USER CODE END 0 */
 
@@ -425,16 +427,18 @@ int main(void)
       {
         Navigation_SetPid(cmd.hkp, cmd.hki, cmd.hkd, cmd.xkp, cmd.xki, cmd.xkd);
         if (cmd.ys != 0) Navigation_SetYawSign(cmd.ys);   /* IMU 方向翻转，水上可改 */
+        if (cmd.yawos != -999.0f) Navigation_SetYawOffset(cmd.yawos);  /* IMU 安装偏置 */
         /* 增益用整数 ×1000 回显。newlib-nano 默认不链接浮点 printf，
          * 原来的 %.3f 会输出空字符串（"hk":,），命令有没有生效完全看不出来。
          * 与遥测里的 hk/hi/hd 保持同一种编码，也不引入浮点格式化开销。 */
         Lora_Printf("{\"t\":\"ack\",\"kind\":\"pid\",\"hk\":%ld,\"hi\":%ld,\"hd\":%ld,"
-                    "\"xk\":%ld,\"xi\":%ld,\"xd\":%ld,\"ys\":%d}\r\n",
+                    "\"xk\":%ld,\"xi\":%ld,\"xd\":%ld,\"ys\":%d,\"yawos\":%ld}\r\n",
                     (long)(heading_pid.kp * 1000.0f), (long)(heading_pid.ki * 1000.0f),
                     (long)(heading_pid.kd * 1000.0f),
                     (long)(crosstrack_pid.kp * 1000.0f), (long)(crosstrack_pid.ki * 1000.0f),
                     (long)(crosstrack_pid.kd * 1000.0f),
-                    (int)Navigation_GetYawSign());
+                    (int)Navigation_GetYawSign(),
+                    (long)(Navigation_GetYawOffset() * 100.0f));
       }
     }
 
@@ -472,12 +476,14 @@ int main(void)
       if (Lora_GetPendingMotorCalCmd(&cmd))
       {
         Motor_SetCalibration(cmd.ls, cmd.rs, cmd.lo, cmd.ro, cmd.ldz, cmd.rdz);
+        if (cmd.dir != 0) Motor_SetDirSign(cmd.dir);
         Lora_Printf("{\"t\":\"ack\",\"kind\":\"mcal\",\"ls\":%ld,\"rs\":%ld,\"lo\":%ld,\"ro\":%ld,"
-                    "\"ldz\":%ld,\"rdz\":%ld}\r\n",
+                    "\"ldz\":%ld,\"rdz\":%ld,\"dir\":%d}\r\n",
                      (long)(motor_cal.left_scale * 100.0f),
                      (long)(motor_cal.right_scale * 100.0f),
                      (long)motor_cal.left_offset, (long)motor_cal.right_offset,
-                     (long)motor_cal.left_deadzone, (long)motor_cal.right_deadzone);
+                     (long)motor_cal.left_deadzone, (long)motor_cal.right_deadzone,
+                     (int)motor_cal.dir_sign);
       }
     }
 

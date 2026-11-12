@@ -307,6 +307,8 @@ static void Lora_ProcessLine(const char *line)
         /* 缺省 -1 = 保持当前死区值，避免只改缩放时把死区清掉 */
         cmd.ldz = (int16_t)Lora_ExtractInt(line, "ldz", -1);
         cmd.rdz = (int16_t)Lora_ExtractInt(line, "rdz", -1);
+        /* 推进电机方向翻转：0 = 保持当前值 */
+        cmd.dir = (int8_t)Lora_ExtractInt(line, "dir", 0);
         lora_pending_motorcal_cmd = cmd;
         lora_motorcal_cmd_ready = 1;
     }
@@ -340,6 +342,8 @@ static void Lora_ProcessLine(const char *line)
          * 不同模块的 yaw 可能顺时针增大或逆时针增大，方向反了船会掉头；
          * 做成运行时可调，水上发现不对可以立刻改，不用捞船重烧。 */
         cmd.ys = (int8_t)Lora_ExtractInt(line, "ys", 0);
+        /* IMU 安装偏置。用 -999 作为"未提供"哨兵（合法的偏置是 -180~180） */
+        cmd.yawos = Lora_ExtractFloat(line, "yawos", -999.0f);
 
         lora_pending_pid_cmd = cmd;
         lora_pid_cmd_ready = 1;

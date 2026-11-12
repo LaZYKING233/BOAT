@@ -44,12 +44,19 @@ typedef struct {
     int16_t right_offset;   // 右电机 PWM 微调偏移
     int16_t left_deadzone;  // 左电机启动死区（PWM counts，0 = 不补偿）
     int16_t right_deadzone; // 右电机启动死区
+    int8_t  dir_sign;       // 方向符号：+1 正常，-1 反向（两个推进电机一起翻）
+                            // 实测若"给正指令船往后退"，把它设成 -1 即可，
+                            // 不用拆线换极性。
 } MotorCal_t;
 
 extern MotorCal_t motor_cal;
 
 void Motor_Init(void);
 void Motor_Go_PWM(MotorId motor, int16_t pulse);
+
+/** 设置推进电机的方向符号（+1 正常 / -1 反向），运行时可用 */
+void Motor_SetDirSign(int8_t sign);
+int8_t Motor_GetDirSign(void);
 
 /**
  * @brief  取最近一次实际下发给电机的 PWM（带符号，-999~999）

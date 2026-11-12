@@ -29,6 +29,13 @@ static float hold_integral = 0.0f;
  * 才导致水上无限打转。 */
 static int8_t nav_yaw_sign = -1;
 
+/* IMU 安装偏置（度）。
+ *
+ * 2026-11-12 水上实测：船实际走了 2.49 米正北，而 IMU 报"朝正南"，
+ * 相差 172.6°，接近 180°。若模块装反了，把这个值设成 180 即可，
+ * 不用拆船重新安装。 */
+static float nav_yaw_offset_deg = 0.0f;
+
 /* --- 航向保持测试（室内调内环，不需要 GPS）--- */
 static NavHeadingMetrics_t hdg_metrics;
 static float    hdg_elapsed_s;
@@ -133,6 +140,16 @@ void Navigation_SetYawSign(int8_t sign)
 int8_t Navigation_GetYawSign(void)
 {
     return nav_yaw_sign;
+}
+
+void Navigation_SetYawOffset(float deg)
+{
+    nav_yaw_offset_deg = Navigation_NormalizeAngle(deg);
+}
+
+float Navigation_GetYawOffset(void)
+{
+    return nav_yaw_offset_deg;
 }
 PID_t heading_pid;
 PID_t crosstrack_pid;
@@ -530,7 +547,7 @@ static void Navigation_DriveHeading(float desired_heading, float current_yaw, in
     // 计算航向误差（归一化到 -180 ~ 180）
     /* 按标定方向把当前偏航角折算成罗盘约定 */
     nav.heading_error = Navigation_NormalizeAngle(
-        nav.target_heading - current_yaw * (float)nav_yaw_sign);
+        nav.target_heading - (current_yaw * (float)nav_yaw_sign + nav_yaw_offset_deg));
 
     // PID计算转向输出（带真实时间步长）
     nav.turn_output = (int16_t)PID_Calculate(&heading_pid, nav.heading_error, dt_s);

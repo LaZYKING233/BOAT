@@ -175,6 +175,14 @@ void Navigation_SetYawSign(int8_t sign);
 int8_t Navigation_GetYawSign(void);
 
 /**
+ * @brief 设置 IMU 安装偏置（度）
+ * @note  模块装歪了（例如转了 180°）时，用它把读数折算回船头方向。
+ *        航向误差 = 目标方位 - (当前yaw折算 + 偏置)
+ */
+void Navigation_SetYawOffset(float deg);
+float Navigation_GetYawOffset(void);
+
+/**
  * @brief  运行时设置双层 PID 增益（上位机下发，免重新编译烧录）
  * @param  hkp/hki/hkd  内环：航向误差 -> 转向输出
  * @param  xkp/xki/xkd  外环：横向偏差 -> 目标航向修正角

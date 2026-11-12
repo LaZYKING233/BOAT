@@ -15,7 +15,7 @@
  *
  * 死区补偿让"指令 1"就能起转，代价是低端不再完全线性；
  * 巡航区间 40~70 已对齐，这是主要工作范围。换电机或换桨后要重测。 */
-MotorCal_t motor_cal = { 0.90f, 1.0f, 0, 0, 300, 300 };
+MotorCal_t motor_cal = { 0.90f, 1.0f, 0, 0, 300, 300, 1 };
 
 /* 最近一次实际下发的 PWM（带符号），供遥测上报 */
 static int16_t motor_last_pwm[4] = { 0, 0, 0, 0 };
@@ -30,6 +30,16 @@ void Motor_Init(void)
 	TIM1->BDTR |= TIM_BDTR_MOE;
 }
 
+void Motor_SetDirSign(int8_t sign)
+{
+    motor_cal.dir_sign = (sign < 0) ? -1 : 1;
+}
+
+int8_t Motor_GetDirSign(void)
+{
+    return motor_cal.dir_sign;
+}
+
 void Motor_Go_PWM(MotorId motor, int16_t speed)
 {
     uint16_t pwm_value;
@@ -41,6 +51,14 @@ void Motor_Go_PWM(MotorId motor, int16_t speed)
 
     if (speed > 100) speed = 100;
     if (speed < -100) speed = -100;
+
+    /* 方向符号：实测"正指令往后走"时置 -1，把方向脚整体翻过来。
+     * 只翻转推进电机，转向电机不参与（它们没装）。 */
+    if (motor_cal.dir_sign < 0 &&
+        (motor == MOTOR_SPEED_LEFT || motor == MOTOR_SPEED_RIGHT))
+    {
+        speed = (int16_t)(-speed);
+    }
 
     cmd = abs((int)speed);   /* 0..100，方向由下面的方向脚决定 */
 
