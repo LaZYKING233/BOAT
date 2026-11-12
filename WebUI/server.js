@@ -5,6 +5,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const { SerialPort } = require('serialport');
+const net = require('net');
 
 const HTTP_PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 const DEFAULT_BAUD_RATE = 115200;
@@ -2043,7 +2044,78 @@ function bindPortEvents(port) {
   });
 }
 
+/**
+ * 网络串口：把远端机器上的串口通过 TCP 桥接过来。
+ *
+ * 设备（CH340 / ST-Link）接在中继盒子上，盒子跑 tools/relay/serial-bridge.js，
+ * WebUI 仍然跑在本机——所有计算、图表、记录都在本机，盒子只做字节转发。
+ *
+ * 地址格式：tcp://主机:端口，例如 tcp://100.89.233.10:4001
+ */
+function isNetworkPort(portPath) {
+  return /^tcp:\/\//i.test(String(portPath || ''));
+}
+
+function openNetworkPort(url) {
+  const match = /^tcp:\/\/([^:/\s]+):(\d+)$/i.exec(url);
+  if (!match) {
+    return Promise.reject(new Error('网络串口格式应为 tcp://主机:端口'));
+  }
+
+  const host = match[1];
+  const port = Number(match[2]);
+
+  return new Promise((resolve, reject) => {
+    const socket = net.connect({ host, port });
+    let settled = false;
+
+    socket.setNoDelay(true);
+
+    socket.once('connect', () => {
+      settled = true;
+      resolve(wrapNetworkSocket(socket, url));
+    });
+
+    socket.once('error', (error) => {
+      if (!settled) {
+        settled = true;
+        reject(new Error(`连不上 ${host}:${port} — ${error.message}`));
+      }
+    });
+  });
+}
+
+/** 把 net.Socket 包成和 SerialPort 一样的接口，其余代码不用改 */
+function wrapNetworkSocket(socket, label) {
+  return {
+    path: label,
+    isOpen: true,
+    write(buffer, callback) {
+      if (!socket.writable) {
+        if (callback) callback(new Error('网络串口已断开'));
+        return;
+      }
+      socket.write(buffer, callback);
+    },
+    /* SerialPort 的 drain 是回调，Socket 的是事件；这里直接放行 */
+    drain(callback) {
+      if (callback) callback();
+    },
+    close(callback) {
+      try { socket.end(); socket.destroy(); } catch { /* 已关闭 */ }
+      if (callback) callback();
+    },
+    on(event, handler) {
+      socket.on(event, handler);
+    },
+  };
+}
+
 function openSerialPort(portPath, baudRate) {
+  if (isNetworkPort(portPath)) {
+    return openNetworkPort(portPath);
+  }
+
   return new Promise((resolve, reject) => {
     const port = new SerialPort({
       path: portPath,
