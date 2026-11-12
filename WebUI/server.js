@@ -2822,4 +2822,33 @@ wss.on('connection', (socket) => {
 
 server.listen(HTTP_PORT, () => {
   console.log(`BOAT WebUI running at http://localhost:${HTTP_PORT}`);
+
+  /* 开机自动连串口。
+   *
+   *   BOAT_SERIAL=COM6                       本地串口
+   *   BOAT_SERIAL=tcp://100.100.25.105:4001  远端中继（Tailscale）
+   *
+   * 出门用中继时，带上这个环境变量启动，网页一开就是连着的，
+   * 不用每次手点「连接」——现场少一个操作就少一个出错的机会。 */
+  const preset = (process.env.BOAT_SERIAL || '').trim();
+  if (preset) {
+    openSerialPort(preset, DEFAULT_BAUD_RATE)
+      .then((port) => {
+        activePort = port;
+        activeBaudRate = DEFAULT_BAUD_RATE;
+        lineBuffer = Buffer.alloc(0);
+        bindPortEvents(port);
+        autoReconnect.path = preset;
+        autoReconnect.baudRate = DEFAULT_BAUD_RATE;
+        autoReconnect.suspended = false;
+        console.log(`[serial] 已按 BOAT_SERIAL 自动连接: ${preset}`);
+        broadcast({ kind: 'serial-status', status: getSerialStatus() });
+      })
+      .catch((error) => {
+        console.warn(`[serial] BOAT_SERIAL 自动连接失败: ${preset} — ${error.message}`);
+        autoReconnect.path = preset;
+        autoReconnect.suspended = false;
+        scheduleReconnect();
+      });
+  }
 });
