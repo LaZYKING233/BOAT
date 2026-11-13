@@ -173,7 +173,13 @@ function renderFreshness() {
   const telemetry = state.latestData ? freshness(state.telemetryLastAt || serialAt) : { level: 'stale', label: '等待数据', age: '—' };
   $('wsStatusText').textContent = state.wsConnected ? `已连接 · ${ws.label}` : ws.label;
   $('wsAge').textContent = ws.age;
-  $('serialStatusText').textContent = state.status.connected ? `已连接 · ${serial.label}` : '未连接';
+  /* 「已连接」只说明链路建立，冲帐要另看数据：
+   * TCP/串口连着但 5 秒没有数据时，明确写「无数据」，
+   * 免得把"链路通但船没发"误当成"一切正常"。 */
+  const serialStale = state.status.connected && serial.level === 'stale';
+  $('serialStatusText').textContent = state.status.connected
+    ? (serialStale ? '已连接 · 无数据' : `已连接 · ${serial.label}`)
+    : '未连接';
   $('serialPortText').textContent = state.status.connected ? `${state.status.portPath || '—'} · ${state.status.baudRate || '—'}` : '—';
   $('dataStatusText').textContent = state.latestData ? `${telemetry.label}${telemetry.level === 'stale' ? '（保留末值）' : ''}` : '等待数据';
   $('dataAge').textContent = telemetry.age;
@@ -687,6 +693,16 @@ function renderDiagnostics() {
 
 function renderConnection() {
   $('connectedPort').textContent = state.status.connected ? `${state.status.portPath || '—'} · ${state.status.baudRate || '—'}` : '未连接'; setRiskBadge($('serialBadge'), { level: state.status.connected ? 'normal' : 'unknown', label: state.status.connected ? '已连接' : '未连接' });
+  /* 链路通但长时间没数据 —— 中继场景下最常见（船没发/串口掉了但 TCP 还在） */
+  if (state.status.connected) {
+    const since = parseTime(state.status.lastMessageAt);
+    const silentMs = since ? Date.now() - since : Infinity;
+    if (silentMs > 5000) {
+      $('serialBadge').textContent = '无数据';
+      $('serialBadge').className = 'risk-badge warning';
+      $('serialStatusText').textContent = '已连接 · 无数据';
+    }
+  }
   $('connectBtn').disabled = state.status.connected || (!$('serialSelect').value && !($('serialManual') && $('serialManual').value.trim())); $('disconnectBtn').disabled = !state.status.connected; $('sidebarDevice').textContent = state.status.portPath || '等待设备'; $('sidebarDeviceState').textContent = state.status.connected ? '串口已连接' : '串口未连接'; $('sidebarDot').className = `status-dot ${state.status.connected ? 'online' : ''}`;
   const controls = qsa('[data-command], #sendCommandBtn, #sendMotorBtn, #stopMotorsBtn, #sendCalibrationBtn'); controls.forEach(control => { control.disabled = !state.status.connected; });
   $('manualSampleBtn').disabled = !state.status.connected || !state.latestData;
